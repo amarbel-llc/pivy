@@ -15,7 +15,6 @@
     (utils.lib.eachDefaultSystem (
       system:
       let
-
         pkgs = import nixpkgs {
           inherit system;
         };
@@ -24,28 +23,79 @@
           inherit system;
         };
 
-        packages = {
-          inherit (pkgs)
-            gcc
-            gnumake
-            libressl
-            pcsclite
-            pkg-config
-            libbsd
-            libedit
-            ragel
-            zlib
-            ;
+        libressl-src = pkgs.fetchurl {
+          url = "https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-4.0.0.tar.gz";
+          sha256 = "sha256-TYQZVfCsw9/HHQ49018oOvRhIiNQ4mhD/qlzHAJGoeQ=";
+        };
+
+        openssh-src = pkgs.fetchurl {
+          url = "https://ftp.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-10.0p1.tar.gz";
+          sha256 = "sha256-AhoucJoO30JQsSVr1anlAEEakN3avqgw7VnO+Q652Fw=";
+        };
+
+        buildInputs = with pkgs; [
+          pcsclite
+          libbsd
+          libedit
+          zlib
+        ];
+
+        nativeBuildInputs = with pkgs; [
+          gcc
+          gnumake
+          pkg-config
+          ragel
+          curl
+          gnutar
+          patch
+        ];
+
+        pivy = pkgs.stdenv.mkDerivation {
+          pname = "pivy";
+          version = "0.12.1";
+
+          src = ./.;
+
+          inherit buildInputs nativeBuildInputs;
+
+          postPatch = ''
+            # Extract vendored sources instead of downloading
+            mkdir -p libressl openssh
+            tar -xzf ${libressl-src} --strip-components=1 -C libressl
+            touch .libressl.extract
+            tar -xzf ${openssh-src} --strip-components=1 -C openssh
+            touch .openssh.extract
+          '';
+
+          buildPhase = ''
+            runHook preBuild
+            make -j$NIX_BUILD_CORES
+            runHook postBuild
+          '';
+
+          installPhase = ''
+            runHook preInstall
+            mkdir -p $out/bin
+            install -m 755 pivy-tool $out/bin/
+            install -m 755 pivy-agent $out/bin/
+            install -m 755 pivy-box $out/bin/
+            runHook postInstall
+          '';
+
+          meta = with pkgs.lib; {
+            description = "PIV tools for YubiKey and similar hardware tokens";
+            homepage = "https://github.com/arekinath/pivy";
+            license = licenses.mpl20;
+            platforms = platforms.linux ++ platforms.darwin;
+          };
         };
       in
       {
-        packages.default = pkgs.symlinkJoin {
-          name = "ykup";
-          paths = builtins.attrValues packages;
-        };
+        packages.default = pivy;
+        packages.pivy = pivy;
 
         devShells.default = pkgs.mkShell {
-          packages = builtins.attrValues packages;
+          packages = buildInputs ++ nativeBuildInputs;
         };
       }
     ));
