@@ -33,6 +33,71 @@
           sha256 = "sha256-AhoucJoO30JQsSVr1anlAEEakN3avqgw7VnO+Q652Fw=";
         };
 
+        libressl = pkgs.stdenv.mkDerivation {
+          pname = "libressl-pivy";
+          version = "4.0.0";
+
+          src = libressl-src;
+
+          configureFlags = [
+            "--enable-static"
+            "--disable-asm"  # Simplify cross-compilation
+          ];
+
+          CFLAGS = "-fPIC -Wno-error";
+          LDFLAGS = "";
+
+          buildPhase = ''
+            cd crypto
+            make -j$NIX_BUILD_CORES
+          '';
+
+          installPhase = ''
+            mkdir -p $out/lib $out/include
+            # Copy static libraries only
+            cp .libs/libcrypto.a $out/lib/
+            cp .libs/libcompat.a $out/lib/ || true
+            cp .libs/libcompatnoopt.a $out/lib/ || true
+            # Copy headers
+            cp -r ../include/* $out/include/
+          '';
+        };
+
+        openssh = pkgs.stdenv.mkDerivation {
+          pname = "openssh-pivy";
+          version = "10.0p1";
+
+          src = openssh-src;
+
+          patches = [ ./openssh.patch ];
+
+          buildInputs = [ libressl pkgs.zlib ];
+
+          configureFlags = [
+            "--disable-security-key"
+            "--disable-pkcs11"
+            "--with-ssl-dir=${libressl}"
+          ];
+
+          CFLAGS = pkgs.lib.concatStringsSep " " [
+            "-I${libressl}/include"
+            "-I${pkgs.zlib.dev}/include"
+            "-Wno-error"
+          ];
+
+          LDFLAGS = pkgs.lib.concatStringsSep " " [
+            "-L${libressl}/lib"
+            "-L${pkgs.zlib}/lib"
+          ];
+
+          dontBuild = true;
+
+          installPhase = ''
+            mkdir -p $out
+            cp -r . $out/
+          '';
+        };
+
         buildInputs = with pkgs; [
           libbsd
           libedit
@@ -60,18 +125,34 @@
 
           inherit buildInputs nativeBuildInputs;
 
-          postPatch = ''
-            # Extract vendored sources instead of downloading
-            mkdir -p libressl openssh
-            tar -xzf ${libressl-src} --strip-components=1 -C libressl
-            touch .libressl.extract
-            tar -xzf ${openssh-src} --strip-components=1 -C openssh
-            touch .openssh.extract
+          preBuild = ''
+            # Copy openssh to writable directory (Makefile needs to compile and write .o files)
+            cp -r ${openssh} openssh
+            chmod -R +w openssh
+
+            # Create minimal libressl structure with pre-built library
+            mkdir -p libressl/include libressl/crypto/.libs
+            ln -sf ${libressl}/include/* libressl/include/
+            ln -sf ${libressl}/lib/libcrypto.a libressl/crypto/.libs/libcrypto.a
+
+            # Create a no-op Makefile in libressl/crypto
+            cat > libressl/crypto/Makefile <<'EOF'
+            all:
+            	@true
+            EOF
+
+            # Touch markers to skip extract/patch/configure steps
+            # Make libcrypto.a appear newer than configure marker
+            touch .libressl.extract .libressl.patch .libressl.configure
+            touch -r ${libressl}/lib/libcrypto.a libressl/crypto/.libs/libcrypto.a || true
+            touch .openssh.extract .openssh.patch .openssh.configure
           '';
 
           buildPhase = ''
             runHook preBuild
             make -j$NIX_BUILD_CORES \
+              LIBRESSL_INC=${libressl}/include \
+              LIBRESSL_LIB=${libressl}/lib \
               ZLIB_LIB=${pkgs.zlib}/lib \
               SYSTEM_CFLAGS="-arch ${pkgs.stdenv.hostPlatform.darwinArch}" \
               SYSTEM_LDFLAGS="-arch ${pkgs.stdenv.hostPlatform.darwinArch}"
@@ -119,6 +200,8 @@
       {
         packages.default = pivy;
         packages.pivy = pivy;
+        packages.libressl = libressl;
+        packages.openssh = openssh;
 
         devShells.default = pkgs.mkShell {
           packages = buildInputs ++ nativeBuildInputs;
