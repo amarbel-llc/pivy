@@ -154,8 +154,10 @@
               LIBRESSL_INC=${libressl}/include \
               LIBRESSL_LIB=${libressl}/lib \
               ZLIB_LIB=${pkgs.zlib}/lib \
-              SYSTEM_CFLAGS="-arch ${pkgs.stdenv.hostPlatform.darwinArch}" \
-              SYSTEM_LDFLAGS="-arch ${pkgs.stdenv.hostPlatform.darwinArch}"
+              ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+                SYSTEM_CFLAGS="-arch ${pkgs.stdenv.hostPlatform.darwinArch}" \
+                SYSTEM_LDFLAGS="-arch ${pkgs.stdenv.hostPlatform.darwinArch}"
+              ''}
             runHook postBuild
           '';
 
