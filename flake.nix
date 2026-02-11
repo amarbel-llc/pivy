@@ -34,10 +34,11 @@
         };
 
         buildInputs = with pkgs; [
-          pcsclite
           libbsd
           libedit
           zlib
+        ] ++ pkgs.lib.optionals (!pkgs.stdenv.isDarwin) [
+          pcsclite
         ];
 
         nativeBuildInputs = with pkgs; [
