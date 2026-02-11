@@ -48,6 +48,7 @@
           curl
           gnutar
           patch
+          makeWrapper
         ];
 
         pivy = pkgs.stdenv.mkDerivation {
@@ -76,9 +77,30 @@
           installPhase = ''
             runHook preInstall
             mkdir -p $out/bin
-            install -m 755 pivy-tool $out/bin/
-            install -m 755 pivy-agent $out/bin/
-            install -m 755 pivy-box $out/bin/
+            install -m 755 pivy-tool $out/bin/.pivy-tool-unwrapped
+            install -m 755 pivy-agent $out/bin/.pivy-agent-unwrapped
+            install -m 755 pivy-box $out/bin/.pivy-box-unwrapped
+
+            # Create wrapper scripts that preload system pcsclite
+            # This is needed on non-NixOS where pcscd version must match client library
+            for cmd in pivy-tool pivy-agent pivy-box; do
+              cat > $out/bin/$cmd <<WRAPPER
+            #!/bin/sh
+            for lib in \\
+              /usr/lib/x86_64-linux-gnu/libpcsclite.so.1 \\
+              /usr/lib/aarch64-linux-gnu/libpcsclite.so.1 \\
+              /usr/lib/libpcsclite.so.1 \\
+              /lib/x86_64-linux-gnu/libpcsclite.so.1 \\
+              /lib/libpcsclite.so.1; do
+              if [ -e "\$lib" ]; then
+                export LD_PRELOAD="\$lib\''${LD_PRELOAD:+:\$LD_PRELOAD}"
+                break
+              fi
+            done
+            exec $out/bin/.$cmd-unwrapped "\$@"
+            WRAPPER
+              chmod +x $out/bin/$cmd
+            done
             runHook postInstall
           '';
 
