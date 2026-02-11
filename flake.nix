@@ -70,7 +70,10 @@
 
           buildPhase = ''
             runHook preBuild
-            make -j$NIX_BUILD_CORES
+            make -j$NIX_BUILD_CORES \
+              ZLIB_LIB=${pkgs.zlib}/lib \
+              SYSTEM_CFLAGS="-arch ${pkgs.stdenv.hostPlatform.darwinArch}" \
+              SYSTEM_LDFLAGS="-arch ${pkgs.stdenv.hostPlatform.darwinArch}"
             runHook postBuild
           '';
 
