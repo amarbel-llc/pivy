@@ -232,6 +232,18 @@
             WRAPPER
               chmod +x $out/bin/$cmd
             done
+            # Install service files
+            ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+              mkdir -p $out/lib/systemd/user
+              substitute pivy-agent@.service $out/lib/systemd/user/pivy-agent@.service \
+                --replace-fail '@@BINDIR@@' "$out/bin"
+            ''}
+            ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+              mkdir -p $out/share/pivy
+              substitute macosx/net.cooperi.pivy-agent.plist $out/share/pivy/net.cooperi.pivy-agent.plist \
+                --replace-fail '/opt/pivy/bin/pivy-agent' "$out/bin/pivy-agent"
+            ''}
+
             runHook postInstall
           '';
 
