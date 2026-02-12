@@ -311,7 +311,7 @@ _SSS_SOURCES=			\
 	randombytes.c
 SSS_SOURCES=$(_SSS_SOURCES:%=sss/%)
 
-PIV_COMMON_SOURCES=		\
+_PIV_COMMON_SOURCES=		\
 	piv.c			\
 	piv-fascn.c		\
 	piv-cardcap.c		\
@@ -324,7 +324,8 @@ PIV_COMMON_SOURCES=		\
 	utils.c			\
 	strbuf.c		\
 	slot-spec.c
-PIV_COMMON_HEADERS=		\
+PIV_COMMON_SOURCES=$(_PIV_COMMON_SOURCES:%=src/%)
+_PIV_COMMON_HEADERS=		\
 	piv.h			\
 	tlv.h			\
 	bunyan.h		\
@@ -333,37 +334,42 @@ PIV_COMMON_HEADERS=		\
 	debug.h			\
 	utils.h			\
 	slot-spec.h
+PIV_COMMON_HEADERS=$(_PIV_COMMON_HEADERS:%=src/%)
 
 ifneq ($(SYSTEM), OpenBSD)
-PIV_COMMON_SOURCES+= 	readpassphrase.c
+PIV_COMMON_SOURCES+= 	src/readpassphrase.c
 endif
 
 RAGEL_VER :=	$(shell $(RAGEL) -v | \
 		    awk '$$5 == "version" { print ($$6 > 6.0); }')
 
 ifeq ($(RAGEL_VER), 1)
-%.c: %.rl
+src/%.c: src/%.rl
 	$(RAGEL) -o $@ $<
-%.png: %.rl
+src/%.png: src/%.rl
 	$(RAGEL) -Vp $< | dot -Tpng > $@
 endif
 
-PIV_CERT_SOURCES=			\
+_PIV_CERT_SOURCES=			\
 	piv-certs.c		\
 	pkinit_asn1.c
-PIV_CERT_HEADERS=			\
+PIV_CERT_SOURCES=$(_PIV_CERT_SOURCES:%=src/%)
+_PIV_CERT_HEADERS=			\
 	piv-ca.h		\
 	pkinit_asn1.h
+PIV_CERT_HEADERS=$(_PIV_CERT_HEADERS:%=src/%)
 
-EBOX_COMMON_SOURCES=		\
+_EBOX_COMMON_SOURCES=		\
 	ebox.c			\
 	ebox-cmd.c
-EBOX_COMMON_HEADERS=		\
+EBOX_COMMON_SOURCES=$(_EBOX_COMMON_SOURCES:%=src/%)
+_EBOX_COMMON_HEADERS=		\
 	ebox.h			\
 	ebox-cmd.h
+EBOX_COMMON_HEADERS=$(_EBOX_COMMON_HEADERS:%=src/%)
 
 PIVTOOL_SOURCES=		\
-	pivy-tool.c		\
+	src/pivy-tool.c		\
 	$(PIV_COMMON_SOURCES)	\
 	$(PIV_CERT_SOURCES)
 PIVTOOL_HEADERS=		\
@@ -400,15 +406,15 @@ LIBPIVY_SOURCES=		\
 	$(PIV_CERT_SOURCES)	\
 	$(EBOX_COMMON_SOURCES)	\
 	$(SSS_SOURCES)		\
-	piv-ca.c		\
-	cleanup-exit.c
+	src/piv-ca.c		\
+	src/cleanup-exit.c
 LIBPIVY_HEADERS=		\
 	$(PIV_COMMON_HEADERS)	\
 	$(PIV_CERT_HEADERS)	\
 	$(EBOX_COMMON_HEADERS)	\
 	$(PIV_CA_HEADERS)
 ifeq (yes, $(HAVE_JSONC))
-	LIBPIVY_SOURCES+=	piv-ca.c
+	LIBPIVY_SOURCES+=	src/piv-ca.c
 	LIBPIVY_HEADERS+=	$(PIV_CA_HEADERS)
 endif
 LIBPIVY_OBJS=		$(LIBPIVY_SOURCES:%.c=%.o)
@@ -446,8 +452,8 @@ libpivy.so: libpivy.so.1
 ifeq (yes, $(HAVE_JSONC))
 
 PIVYCA_SOURCES=			\
-	pivy-ca.c		\
-	piv-ca.c		\
+	src/pivy-ca.c		\
+	src/piv-ca.c		\
 	$(PIV_COMMON_SOURCES)	\
 	$(PIV_CERT_SOURCES)	\
 	$(EBOX_COMMON_SOURCES)	\
@@ -501,7 +507,7 @@ install: install_pivyca
 endif
 
 PIVYBOX_SOURCES=		\
-	pivy-box.c		\
+	src/pivy-box.c		\
 	$(EBOX_COMMON_SOURCES)	\
 	$(PIV_COMMON_SOURCES)	\
 	$(SSS_SOURCES)
@@ -537,7 +543,7 @@ pivy-box: $(PIVYBOX_OBJS) $(LIBSSH) $(LIBCRYPTO)
 
 
 PIVZFS_SOURCES=			\
-	pivy-zfs.c		\
+	src/pivy-zfs.c		\
 	$(EBOX_COMMON_SOURCES)	\
 	$(PIV_COMMON_SOURCES)	\
 	$(SSS_SOURCES)
@@ -589,7 +595,7 @@ install: install_pivyzfs
 endif
 
 PIVYLUKS_SOURCES=		\
-	pivy-luks.c		\
+	src/pivy-luks.c		\
 	$(EBOX_COMMON_SOURCES)	\
 	$(PIV_COMMON_SOURCES)	\
 	$(SSS_SOURCES)
@@ -639,7 +645,7 @@ install: install_pivyluks
 endif
 
 PAMPIVY_SOURCES=		\
-	pam_pivy.c		\
+	src/pam_pivy.c		\
 	$(PIV_COMMON_SOURCES)
 PAMPIVY_HEADERS=		\
 	$(PIV_COMMON_HEADERS)	\
@@ -685,7 +691,7 @@ install: install_pampivy
 endif
 
 AGENT_SOURCES=			\
-	pivy-agent.c		\
+	src/pivy-agent.c	\
 	$(PIV_COMMON_SOURCES)
 AGENT_HEADERS=			\
 	$(PIV_COMMON_HEADERS)
@@ -714,7 +720,10 @@ pivy-agent :		HEADERS=	$(AGENT_HEADERS)
 pivy-agent: $(AGENT_OBJS) $(LIBSSH) $(LIBCRYPTO)
 	$(CC) $(LDFLAGS) -o $@ $(AGENT_OBJS) $(LIBSSH) $(LIBS)
 
-%.o: %.c $(HEADERS) .openssh.configure $(LIBCRYPTO)
+src/%.o: src/%.c $(HEADERS) .openssh.configure $(LIBCRYPTO)
+	$(CC) $(CFLAGS) -I. -o $@ -c $<
+
+sss/%.o: sss/%.c $(HEADERS) .openssh.configure $(LIBCRYPTO)
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 clean:
@@ -939,7 +948,7 @@ CBMC_OPTS=	-D__CPROVER \
 		--div-by-zero-check \
 		--trace \
 		--drop-unused-functions \
-		-I. -Iopenssh/ \
+		-I. -Isrc/ -Iopenssh/ \
 		$(SYSTEM_CBMCFLAGS) \
 		$(PCSC_CBMCFLAGS) \
 		$(CRYPTO_CBMCFLAGS)
@@ -954,16 +963,16 @@ _CBMC_TARGETS=	tlv.c \
 		strbuf.c
 CBMC_TARGETS=$(_CBMC_TARGETS:%=.%.cbmc)
 
-CBMC_AUX=	cbmc-aux.c
+CBMC_AUX=	src/cbmc-aux.c
 
-.%.cbmc: %
+.%.cbmc: src/%
 	$(CBMC) \
 	    $(CBMC_OPTS) \
 	    -D__CPROVER_MAIN=101011 \
-	    -D__FILE_$(subst -,_,$(subst .,_,$<))=101011 \
+	    -D__FILE_$(subst -,_,$(subst .,_,$(notdir $<)))=101011 \
 	    $< $(CBMC_AUX) && touch $@
 
-.piv-fascn.c.cbmc:	CBMC_AUX+=	strbuf.c
+.piv-fascn.c.cbmc:	CBMC_AUX+=	src/strbuf.c
 .piv-fascn.c.cbmc:	CBMC_OPTS+=	--unwinding-assertions
 .piv-fascn.c.cbmc:	CBMC_OPTS+=	--unwind 30
 .piv-fascn.c.cbmc:	CBMC_OPTS+=	--object-bits 12
