@@ -64,7 +64,7 @@
         };
 
         openssh = pkgs.stdenv.mkDerivation {
-          pname = "openssh-pivy";
+          pname = "openssh-libssh-pivy";
           version = "10.0p1";
 
           src = openssh-src;
@@ -72,6 +72,7 @@
           patches = [ ./openssh.patch ];
 
           buildInputs = [ libressl pkgs.zlib ];
+          nativeBuildInputs = [ pkgs.pkg-config ];
 
           configureFlags = [
             "--disable-security-key"
@@ -82,6 +83,7 @@
           CFLAGS = pkgs.lib.concatStringsSep " " [
             "-I${libressl}/include"
             "-I${pkgs.zlib.dev}/include"
+            "-fPIC"
             "-Wno-error"
           ];
 
@@ -90,11 +92,50 @@
             "-L${pkgs.zlib}/lib"
           ];
 
-          dontBuild = true;
+          buildPhase = ''
+            runHook preBuild
+
+            # Build openbsd-compat library first
+            make -C openbsd-compat libopenbsd-compat.a
+
+            # Source files for libssh.a (from pivy Makefile _LIBSSH_SOURCES)
+            LIBSSH_SRCS="
+              sshbuf.c sshbuf-getput-basic.c sshbuf-getput-crypto.c sshbuf-misc.c
+              sshkey.c ssh-ed25519.c ssh-ecdsa.c ssh-rsa.c ssh-dss.c
+              cipher.c cipher-chachapoly.c cipher-chachapoly-libcrypto.c
+              digest-openssl.c atomicio.c hmac.c authfd.c
+              misc.c match.c ssh-sk.c log.c fatal.c
+              xmalloc.c addrmatch.c addr.c
+              ed25519.c hash.c chacha.c poly1305.c
+            "
+
+            # Compile each source file
+            for src in $LIBSSH_SRCS; do
+              echo "Compiling $src"
+              $CC $NIX_CFLAGS_COMPILE $CFLAGS -I. -Iopenbsd-compat -DHAVE_CONFIG_H -c "$src" -o "''${src%.c}.o"
+            done
+
+            # Create static library combining our objects with openbsd-compat
+            ar rcs libssh.a *.o openbsd-compat/*.o
+
+            runHook postBuild
+          '';
 
           installPhase = ''
-            mkdir -p $out
-            cp -r . $out/
+            runHook preInstall
+
+            mkdir -p $out/lib $out/src
+
+            # Install static library
+            install -m 644 libssh.a $out/lib/
+
+            # Install full source tree (needed by pivy Makefile dependencies)
+            cp -r . $out/src/
+
+            # Also copy libssh.a into src where Makefile expects it
+            cp libssh.a $out/src/libssh.a
+
+            runHook postInstall
           '';
         };
 
@@ -126,9 +167,11 @@
           inherit buildInputs nativeBuildInputs;
 
           preBuild = ''
-            # Copy openssh to writable directory (Makefile needs to compile and write .o files)
-            cp -r ${openssh} openssh
+            # Copy openssh source tree (Makefile needs .c files for dependency checking)
+            cp -r ${openssh}/src openssh
             chmod -R +w openssh
+
+            # The pre-built libssh.a is already in openssh/ from the derivation
 
             # Create minimal libressl structure with pre-built library
             mkdir -p libressl/include libressl/crypto/.libs
@@ -142,10 +185,11 @@
             EOF
 
             # Touch markers to skip extract/patch/configure steps
-            # Make libcrypto.a appear newer than configure marker
             touch .libressl.extract .libressl.patch .libressl.configure
-            touch -r ${libressl}/lib/libcrypto.a libressl/crypto/.libs/libcrypto.a || true
             touch .openssh.extract .openssh.patch .openssh.configure
+
+            # Touch libssh.a to ensure it's newer than any source files
+            touch openssh/libssh.a
           '';
 
           buildPhase = ''
