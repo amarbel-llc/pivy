@@ -3,6 +3,8 @@
     nixpkgs.url = "github:NixOS/nixpkgs/23d72dabcb3b12469f57b37170fcbc1789bd7457";
     nixpkgs-master.url = "github:NixOS/nixpkgs/b28c4999ed71543e71552ccfd0d7e68c581ba7e9";
     utils.url = "https://flakehub.com/f/numtide/flake-utils/0.1.102";
+    batman.url = "github:amarbel-llc/batman";
+    sandcastle.url = "github:amarbel-llc/sandcastle";
   };
 
   outputs =
@@ -11,6 +13,8 @@
       nixpkgs,
       nixpkgs-master,
       utils,
+      batman,
+      sandcastle,
     }:
     (utils.lib.eachDefaultSystem (
       system:
@@ -262,7 +266,14 @@
         packages.openssh = openssh;
 
         devShells.default = pkgs.mkShell {
-          packages = buildInputs ++ nativeBuildInputs;
+          packages = buildInputs ++ nativeBuildInputs ++ (with pkgs; [
+            bats
+            just
+            gum
+          ]) ++ [
+            batman.packages.${system}.bats-libs
+            sandcastle.packages.${system}.default
+          ];
         };
       }
     ));
