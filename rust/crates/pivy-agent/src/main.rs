@@ -22,16 +22,50 @@ struct Cli {
     #[arg(short = 'a')]
     socket: Option<String>,
 
+    /// Slot spec: comma-separated list of slots to expose (e.g. "9a,9e")
+    #[arg(short = 'S')]
+    slot_spec: Option<String>,
+
+    /// Kill a running agent (reads SSH_AGENT_PID)
+    #[arg(short = 'k')]
+    kill: bool,
+
     /// Debug level (repeat for more)
     #[arg(short = 'd', action = clap::ArgAction::Count)]
     debug: u8,
+
+    /// Foreground debug mode
+    #[arg(short = 'D')]
+    foreground_debug: bool,
+
+    /// Print key info and exit
+    #[arg(short = 'i')]
+    info: bool,
+
+    /// Generate Bourne shell commands on stdout
+    #[arg(short = 's')]
+    sh_format: bool,
+
+    /// Generate C-shell commands on stdout
+    #[arg(short = 'c')]
+    csh_format: bool,
+
+    /// Command to execute with agent env set
+    #[arg(trailing_var_arg = true)]
+    command: Vec<String>,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
+    // Handle -k (kill)
+    if cli.kill {
+        return kill_agent();
+    }
+
     let filter = match cli.debug {
+        0 if cli.foreground_debug => "pivy_agent=debug",
         0 => "pivy_agent=info",
         1 => "pivy_agent=debug",
         _ => "pivy_agent=trace",
@@ -39,6 +73,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .init();
+
+    // Parse slot spec if provided
+    let allowed_slots: Option<Vec<u8>> = cli.slot_spec.as_ref().map(|spec| {
+        spec.split(',')
+            .filter_map(|s| u8::from_str_radix(s.trim(), 16).ok())
+            .collect()
+    });
 
     // Enumerate PIV tokens and cache their keys
     let ctx = pivy_piv::PivContext::new()?;
@@ -49,7 +90,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for token in &tokens {
         let guid = token.guid().clone();
 
-        // Filter by GUID if specified
         if let Some(ref filter_guid) = cli.guid {
             if guid.to_hex() != *filter_guid && guid.short_id() != *filter_guid {
                 continue;
@@ -62,6 +102,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let slots = token.read_all_slots().unwrap_or_default();
         for slot in &slots {
+            // Filter by slot spec
+            if let Some(ref allowed) = allowed_slots {
+                if !allowed.contains(&slot.id()) {
+                    continue;
+                }
+            }
+
             cached_keys.push(CachedKey {
                 guid: guid.clone(),
                 reader_name: token.reader_name().to_string(),
@@ -77,6 +124,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // Handle -i (info mode)
+    if cli.info {
+        if cached_keys.is_empty() {
+            eprintln!("No PIV keys found");
+        } else {
+            for key in &cached_keys {
+                let pubkey: ssh_key::PublicKey = key.public_key.clone().into();
+                println!(
+                    "{:02X} {:?} {}",
+                    key.slot_id,
+                    key.algorithm,
+                    pubkey.to_openssh().unwrap_or_default()
+                );
+            }
+        }
+        return Ok(());
+    }
+
     tracing::info!("Loaded {} keys from PIV tokens", cached_keys.len());
 
     // Determine socket path
@@ -86,12 +151,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         dir.join("agent.sock").to_string_lossy().into_owned()
     });
 
-    println!("SSH_AUTH_SOCK={}; export SSH_AUTH_SOCK;", socket_path);
-    println!(
-        "SSH_AGENT_PID={}; export SSH_AGENT_PID;",
-        std::process::id()
-    );
-    println!("echo Agent pid {};", std::process::id());
+    // Detect shell output format
+    let use_csh = cli.csh_format
+        || (!cli.sh_format && std::env::var("SHELL").map_or(false, |s| s.ends_with("csh")));
+
+    if use_csh {
+        println!("setenv SSH_AUTH_SOCK {};", socket_path);
+        println!("setenv SSH_AGENT_PID {};", std::process::id());
+        println!("echo Agent pid {};", std::process::id());
+    } else {
+        println!("SSH_AUTH_SOCK={}; export SSH_AUTH_SOCK;", socket_path);
+        println!(
+            "SSH_AGENT_PID={}; export SSH_AGENT_PID;",
+            std::process::id()
+        );
+        println!("echo Agent pid {};", std::process::id());
+    }
 
     let listener = UnixListener::bind(&socket_path)?;
     let agent = PivyAgent::new(cached_keys);
@@ -102,7 +177,50 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokio::spawn(card::probe_loop(guid, pin_handle));
     }
 
+    // If a command was given, run it with the agent env, then exit
+    if !cli.command.is_empty() {
+        let agent_handle = tokio::spawn(listen(listener, agent));
+
+        let status = tokio::process::Command::new(&cli.command[0])
+            .args(&cli.command[1..])
+            .env("SSH_AUTH_SOCK", &socket_path)
+            .env("SSH_AGENT_PID", std::process::id().to_string())
+            .status()
+            .await?;
+
+        // Clean up
+        agent_handle.abort();
+        let _ = std::fs::remove_file(&socket_path);
+
+        std::process::exit(status.code().unwrap_or(1));
+    }
+
+    // Clean up socket on exit
+    let socket_path_clone = socket_path.clone();
+    tokio::spawn(async move {
+        tokio::signal::ctrl_c().await.ok();
+        let _ = std::fs::remove_file(&socket_path_clone);
+        std::process::exit(0);
+    });
+
     listen(listener, agent).await?;
+
+    Ok(())
+}
+
+fn kill_agent() -> Result<(), Box<dyn std::error::Error>> {
+    let pid_str = std::env::var("SSH_AGENT_PID")
+        .map_err(|_| "SSH_AGENT_PID not set")?;
+    let pid: i32 = pid_str.parse().map_err(|_| "invalid SSH_AGENT_PID")?;
+
+    #[cfg(unix)]
+    unsafe {
+        libc::kill(pid, libc::SIGTERM);
+    }
+
+    println!("unset SSH_AUTH_SOCK;");
+    println!("unset SSH_AGENT_PID;");
+    println!("echo Agent pid {} killed;", pid);
 
     Ok(())
 }
