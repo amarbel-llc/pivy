@@ -9,3 +9,4 @@ pub mod token;
 pub use context::PivContext;
 pub use error::PivError;
 pub use guid::Guid;
+pub use token::PivToken;
