@@ -1,0 +1,17 @@
+[package]
+name = "pivy-agent"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pivy-common = { path = "../pivy-common" }
+pivy-piv = { path = "../pivy-piv" }
+ssh-agent-lib = "0.5"
+ssh-key = { version = "0.6", features = ["alloc", "ecdsa", "rsa", "ed25519"] }
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["rt", "macros", "signal", "sync", "net", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+thiserror = "2"
+zeroize = { version = "1", features = ["derive"] }
+hex = "0.4"

@@ -5,6 +5,7 @@
     utils.url = "https://flakehub.com/f/numtide/flake-utils/0.1.102";
     batman.url = "github:amarbel-llc/batman";
     sandcastle.url = "github:amarbel-llc/sandcastle";
+    devenv-rust.url = "github:friedenberg/eng?dir=devenvs/rust";
   };
 
   outputs =
@@ -15,6 +16,7 @@
       utils,
       batman,
       sandcastle,
+      devenv-rust,
     }:
     (utils.lib.eachDefaultSystem (
       system:
@@ -45,7 +47,7 @@
 
           configureFlags = [
             "--enable-static"
-            "--disable-asm"  # Simplify cross-compilation
+            "--disable-asm" # Simplify cross-compilation
           ];
 
           CFLAGS = "-fPIC -Wno-error";
@@ -75,7 +77,10 @@
 
           patches = [ ./openssh.patch ];
 
-          buildInputs = [ libressl pkgs.zlib ];
+          buildInputs = [
+            libressl
+            pkgs.zlib
+          ];
           nativeBuildInputs = [ pkgs.pkg-config ];
 
           configureFlags = [
@@ -143,13 +148,16 @@
           '';
         };
 
-        buildInputs = with pkgs; [
-          libbsd
-          libedit
-          zlib
-        ] ++ pkgs.lib.optionals (!pkgs.stdenv.isDarwin) [
-          pcsclite
-        ];
+        buildInputs =
+          with pkgs;
+          [
+            libbsd
+            libedit
+            zlib
+          ]
+          ++ pkgs.lib.optionals (!pkgs.stdenv.isDarwin) [
+            pcsclite
+          ];
 
         nativeBuildInputs = with pkgs; [
           gcc
@@ -161,6 +169,37 @@
           patch
           makeWrapper
         ];
+
+        pivy-rust = pkgs.rustPlatform.buildRustPackage {
+          pname = "pivy-agent";
+          version = "0.1.0";
+
+          src = ./rust;
+
+          cargoLock = {
+            lockFile = ./rust/Cargo.lock;
+          };
+
+          buildInputs = [
+            pkgs.openssl.dev
+          ]
+          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+            pkgs.pcsclite
+          ];
+
+          nativeBuildInputs = [
+            pkgs.pkg-config
+          ];
+
+          doCheck = !pkgs.stdenv.hostPlatform.isDarwin;
+
+          meta = with pkgs.lib; {
+            description = "PIV-backed SSH agent (Rust)";
+            homepage = "https://github.com/amarbel-llc/pivy";
+            license = licenses.mpl20;
+            platforms = platforms.linux ++ platforms.darwin;
+          };
+        };
 
         pivy = pkgs.stdenv.mkDerivation {
           pname = "pivy";
@@ -262,6 +301,7 @@
       {
         packages.default = pivy;
         packages.pivy = pivy;
+        packages.pivy-rust = pivy-rust;
         packages.libressl = libressl;
         packages.openssh = openssh;
 
@@ -273,6 +313,16 @@
             batman.packages.${system}.bats
             batman.packages.${system}.bats-libs
             sandcastle.packages.${system}.default
+          ];
+        };
+
+        devShells.rust = pkgs.mkShell {
+          inputsFrom = [ devenv-rust.devShells.${system}.default ];
+          packages = [
+            pkgs.openssl.dev
+          ]
+          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+            pkgs.pcsclite
           ];
         };
       }
