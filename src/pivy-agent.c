@@ -3131,6 +3131,95 @@ get_self_exe_path(void)
 #endif
 }
 
+__attribute__((unused)) static void
+detect_card(char **out_guid, char **out_cak)
+{
+	struct piv_ctx *dctx;
+	struct piv_token *tks, *tk;
+	struct piv_slot *slot;
+	errf_t *err;
+	int count;
+	FILE *f;
+	char *cak_buf = NULL;
+	size_t cak_len = 0;
+
+	dctx = piv_open();
+	VERIFY(dctx != NULL);
+	err = piv_establish_context(dctx, SCARD_SCOPE_SYSTEM);
+	if (err)
+		errfx(1, err, "failed to establish PCSC context");
+
+	err = piv_enumerate(dctx, &tks);
+	if (err)
+		errfx(1, err, "failed to enumerate PIV tokens");
+
+	count = 0;
+	for (tk = tks; tk != NULL; tk = piv_token_next(tk)) {
+		if (!piv_token_has_chuid(tk))
+			continue;
+		count++;
+	}
+
+	if (count == 0) {
+		fprintf(stderr,
+		    "error: no PIV tokens found\n"
+		    "Insert a PIV token and retry, or pass -g explicitly.\n");
+		exit(1);
+	}
+
+	if (count > 1) {
+		fprintf(stderr,
+		    "error: multiple PIV tokens found, "
+		    "specify one with -g:\n");
+		for (tk = tks; tk != NULL; tk = piv_token_next(tk)) {
+			if (!piv_token_has_chuid(tk))
+				continue;
+			fprintf(stderr, "  %s\n",
+			    piv_token_guid_hex(tk));
+		}
+		piv_release(tks);
+		piv_close(dctx);
+		exit(1);
+	}
+
+	/* Exactly one token */
+	for (tk = tks; tk != NULL; tk = piv_token_next(tk)) {
+		if (piv_token_has_chuid(tk))
+			break;
+	}
+
+	*out_guid = strdup(piv_token_guid_hex(tk));
+
+	err = piv_txn_begin(tk);
+	if (err)
+		errfx(1, err, "failed to open transaction on token");
+	err = piv_select(tk);
+	if (err) {
+		piv_txn_end(tk);
+		errfx(1, err, "failed to select PIV applet");
+	}
+	err = piv_read_cert(tk, PIV_SLOT_CARD_AUTH);
+	piv_txn_end(tk);
+
+	slot = piv_get_slot(tk, PIV_SLOT_CARD_AUTH);
+	if (err || slot == NULL) {
+		errf_free(err);
+		fprintf(stderr,
+		    "warning: no 9E (card auth) key found, "
+		    "skipping CAK\n");
+		*out_cak = NULL;
+	} else {
+		f = open_memstream(&cak_buf, &cak_len);
+		VERIFY(f != NULL);
+		VERIFY0(sshkey_write(piv_slot_pubkey(slot), f));
+		fclose(f);
+		*out_cak = cak_buf;
+	}
+
+	piv_release(tks);
+	piv_close(dctx);
+}
+
 static void
 usage(void)
 {
