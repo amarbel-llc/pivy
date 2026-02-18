@@ -7,3 +7,4 @@ pub mod tlv;
 pub mod token;
 
 pub use error::PivError;
+pub use guid::Guid;
