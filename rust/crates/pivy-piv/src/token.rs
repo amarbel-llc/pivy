@@ -1,8 +1,10 @@
 use pcsc::{Protocols, ShareMode};
 
 use crate::apdu::{Apdu, StatusWord, PIV_AID};
+use crate::cert;
 use crate::error::PivError;
 use crate::guid::Guid;
+use crate::slot::{self, PivSlot};
 use crate::tlv::TlvReader;
 use crate::PivContext;
 
@@ -121,6 +123,67 @@ impl PivToken {
 
     pub fn transmit_apdu(&self, apdu: &Apdu) -> Result<(Vec<u8>, StatusWord), PivError> {
         self.transmit(apdu)
+    }
+
+    /// Read a certificate from the given PIV slot and extract the SSH public key.
+    pub fn read_slot(&self, slot_id: u8) -> Result<PivSlot, PivError> {
+        let cert_tag = slot::slot_to_cert_tag(slot_id)
+            .ok_or(PivError::SlotEmpty(slot_id))?;
+        let apdu = Apdu::get_data(cert_tag);
+        let (data, sw) = self.transmit(&apdu)?;
+        if !sw.is_success() {
+            return Err(PivError::SlotEmpty(slot_id));
+        }
+
+        // Response wrapped in tag 0x53
+        let mut reader = TlvReader::new(&data);
+        let outer_tag = reader.read_tag()?;
+        if outer_tag != 0x53 {
+            return Err(PivError::Tlv {
+                message: format!("expected cert outer tag 0x53, got {:#X}", outer_tag),
+            });
+        }
+        let inner = reader.read_value()?;
+
+        // Parse inner TLV: tag 0x70 = certificate, tag 0x71 = cert info
+        let mut inner_reader = TlvReader::new(inner);
+        let mut cert_der: Option<Vec<u8>> = None;
+        while inner_reader.has_remaining() {
+            let tag = inner_reader.read_tag()?;
+            let value = inner_reader.read_value()?;
+            if tag == 0x70 {
+                cert_der = Some(value.to_vec());
+            }
+            // tag 0x71 = certinfo, tag 0xFE = error detection code -- skip
+        }
+
+        let cert_der = cert_der.ok_or(PivError::SlotEmpty(slot_id))?;
+        let (algorithm, public_key) = cert::extract_public_key(&cert_der)?;
+        Ok(PivSlot::new(slot_id, algorithm, cert_der, public_key))
+    }
+
+    /// Read certificates from all standard PIV slots plus retired slots.
+    /// Silently skips empty slots.
+    pub fn read_all_slots(&self) -> Result<Vec<PivSlot>, PivError> {
+        let mut slots = Vec::new();
+
+        // Standard slots
+        for &slot_id in slot::STANDARD_SLOTS {
+            match self.read_slot(slot_id) {
+                Ok(s) => slots.push(s),
+                Err(_) => continue,
+            }
+        }
+
+        // Retired key management slots 82-95
+        for slot_id in 0x82..=0x95_u8 {
+            match self.read_slot(slot_id) {
+                Ok(s) => slots.push(s),
+                Err(_) => continue,
+            }
+        }
+
+        Ok(slots)
     }
 }
 

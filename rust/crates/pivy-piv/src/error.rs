@@ -29,6 +29,9 @@ pub enum PivError {
     #[error("unsupported algorithm: {0}")]
     UnsupportedAlgorithm(String),
 
+    #[error("OpenSSL error: {0}")]
+    Openssl(#[from] openssl::error::ErrorStack),
+
     #[error("crypto error: {0}")]
     Crypto(String),
 
