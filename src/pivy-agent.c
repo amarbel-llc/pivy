@@ -3220,7 +3220,7 @@ detect_card(char **out_guid, char **out_cak)
 	piv_close(dctx);
 }
 
-__attribute__((unused)) static int
+static int
 run_command(const char *path, char *const argv[])
 {
 	pid_t pid;
@@ -3238,7 +3238,7 @@ run_command(const char *path, char *const argv[])
 	return (WIFEXITED(status) ? WEXITSTATUS(status) : 1);
 }
 
-__attribute__((unused)) static int
+static int
 cmd_install_service(int ac, char **av)
 {
 	char *exe_path, *exe_dir;
@@ -3467,7 +3467,7 @@ cmd_install_service(int ac, char **av)
 	return (0);
 }
 
-static int __attribute__((unused))
+static int
 cmd_restart_service(int ac, char **av)
 {
 	(void)ac;
@@ -3505,7 +3505,7 @@ cmd_restart_service(int ac, char **av)
 	return (0);
 }
 
-static int __attribute__((unused))
+static int
 cmd_uninstall_service(int ac, char **av)
 {
 	char path[PATH_MAX];
@@ -3573,6 +3573,9 @@ usage(void)
 	    "       pivy-agent [-c | -s] [-Ddim] [-a bind_address] [-E fingerprint_hash]\n"
 	    "                  -A [command [arg ...]]\n"
 	    "       pivy-agent [-c | -s] -k\n"
+	    "       pivy-agent install-service [-g guid] [-K cak] [-A] [-a socket]\n"
+	    "       pivy-agent restart-service\n"
+	    "       pivy-agent uninstall-service\n"
 	    "\n"
 	    "An ssh-agent work-alike which always contains the keys stored on\n"
 	    "a PIV token and supports other PIV-related extensions.\n"
@@ -3775,6 +3778,15 @@ main(int ac, char **av)
 
 	slot_ena = slotspec_alloc();
 	slotspec_set_default(slot_ena);
+
+	if (ac >= 2) {
+		if (strcmp(av[1], "install-service") == 0)
+			return (cmd_install_service(ac - 1, av + 1));
+		if (strcmp(av[1], "restart-service") == 0)
+			return (cmd_restart_service(ac - 1, av + 1));
+		if (strcmp(av[1], "uninstall-service") == 0)
+			return (cmd_uninstall_service(ac - 1, av + 1));
+	}
 
 	while ((ch = getopt(ac, av, "AcCDdkisE:a:P:g:K:mZUS:u:z:")) != -1) {
 		switch (ch) {
