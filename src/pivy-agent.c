@@ -3403,6 +3403,13 @@ cmd_install_service(int ac, char **av)
 	fclose(f);
 	fprintf(stderr, "Wrote %s\n", path);
 
+	/* Stop any existing service before (re)enabling */
+	char *stop_argv[] = {
+	    "systemctl", "--user", "stop",
+	    "pivy-agent@default.service", NULL
+	};
+	run_command("systemctl", stop_argv);
+
 	/* Enable and start the service */
 	char *reload_argv[] = {
 	    "systemctl", "--user", "daemon-reload", NULL
@@ -3431,6 +3438,13 @@ cmd_install_service(int ac, char **av)
 
 	snprintf(path, sizeof (path),
 	    "%s/Library/LaunchAgents/net.cooperi.pivy-agent.plist", home);
+
+	/* Unload any existing service before overwriting the plist */
+	char *unload_argv[] = {
+	    "launchctl", "unload", path, NULL
+	};
+	run_command("launchctl", unload_argv);
+
 	f = fopen(path, "w");
 	if (f == NULL)
 		fatal("fopen %s: %s", path, strerror(errno));
