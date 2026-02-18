@@ -9,6 +9,18 @@ pub enum PivAlgorithm {
     Ed25519,
 }
 
+impl PivAlgorithm {
+    pub fn to_byte(&self) -> u8 {
+        match self {
+            PivAlgorithm::Rsa1024 => 0x06,
+            PivAlgorithm::Rsa2048 => 0x07,
+            PivAlgorithm::EcP256 => 0x11,
+            PivAlgorithm::EcP384 => 0x14,
+            PivAlgorithm::Ed25519 => 0x22,
+        }
+    }
+}
+
 pub struct PivSlot {
     id: u8,
     algorithm: PivAlgorithm,

@@ -23,6 +23,12 @@ pub enum PivError {
     #[error("PIN incorrect, {retries} retries remaining")]
     PinIncorrect { retries: u32 },
 
+    #[error("PIN required for this operation")]
+    PinRequired,
+
+    #[error("PIN is blocked")]
+    PinBlocked,
+
     #[error("slot {0:#04x} not found or empty")]
     SlotEmpty(u8),
 

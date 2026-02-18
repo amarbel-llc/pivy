@@ -1,11 +1,11 @@
 use pcsc::{Protocols, ShareMode};
 
-use crate::apdu::{Apdu, StatusWord, PIV_AID};
+use crate::apdu::{ga_tag, Apdu, StatusWord, PIV_AID};
 use crate::cert;
 use crate::error::PivError;
 use crate::guid::Guid;
 use crate::slot::{self, PivSlot};
-use crate::tlv::TlvReader;
+use crate::tlv::{TlvReader, TlvWriter};
 use crate::PivContext;
 
 /// CHUID data object tag (NIST SP 800-73-4)
@@ -184,6 +184,72 @@ impl PivToken {
         }
 
         Ok(slots)
+    }
+
+    /// Sign pre-hashed data with the key in the given slot.
+    /// For ECDSA, `data` is the hash digest (32 bytes for P256, 48 for P384).
+    /// For RSA, `data` is the PKCS#1 v1.5 padded DigestInfo (128 or 256 bytes).
+    pub fn sign_prehash(&self, slot_id: u8, data: &[u8]) -> Result<Vec<u8>, PivError> {
+        let slot = self.read_slot(slot_id)?;
+        let alg_byte = slot.algorithm().to_byte();
+
+        // Build GENERAL AUTHENTICATE TLV:
+        //   Tag 0x7C containing:
+        //     Tag 0x82 (response placeholder, empty)
+        //     Tag 0x81 (challenge/data to sign)
+        let mut inner = TlvWriter::new();
+        inner.write_tag_value(ga_tag::RESPONSE as u32, &[]);
+        inner.write_tag_value(ga_tag::CHALLENGE as u32, data);
+        let mut outer = TlvWriter::new();
+        outer.write_tag_value(0x7C, inner.as_bytes());
+
+        let apdu = Apdu::general_authenticate(alg_byte, slot_id, outer.as_bytes());
+        let (resp, sw) = self.transmit(&apdu)?;
+
+        if sw.as_u16() == 0x6982 {
+            return Err(PivError::PinRequired);
+        }
+        if !sw.is_success() {
+            return Err(PivError::Apdu { sw: sw.as_u16() });
+        }
+
+        // Parse response: 0x7C { 0x82 = signature }
+        let mut reader = TlvReader::new(&resp);
+        let outer_tag = reader.read_tag()?;
+        if outer_tag != 0x7C {
+            return Err(PivError::Tlv {
+                message: format!("expected GA response tag 0x7C, got {:#X}", outer_tag),
+            });
+        }
+        let inner_data = reader.read_value()?;
+
+        let mut inner_reader = TlvReader::new(inner_data);
+        let resp_tag = inner_reader.read_tag()?;
+        if resp_tag != ga_tag::RESPONSE as u32 {
+            return Err(PivError::Tlv {
+                message: format!("expected GA response tag 0x82, got {:#X}", resp_tag),
+            });
+        }
+        let signature = inner_reader.read_value()?;
+
+        Ok(signature.to_vec())
+    }
+
+    /// Verify the PIV PIN. The PIN is padded to 8 bytes with 0xFF per the spec.
+    pub fn verify_pin(&self, pin: &str) -> Result<(), PivError> {
+        let apdu = Apdu::verify_pin(pin.as_bytes());
+        let (_, sw) = self.transmit(&apdu)?;
+        if sw.is_success() {
+            Ok(())
+        } else if sw.is_pin_incorrect() {
+            Err(PivError::PinIncorrect {
+                retries: sw.pin_retries_remaining().unwrap_or(0) as u32,
+            })
+        } else if sw.as_u16() == 0x6983 {
+            Err(PivError::PinBlocked)
+        } else {
+            Err(PivError::Apdu { sw: sw.as_u16() })
+        }
     }
 }
 
