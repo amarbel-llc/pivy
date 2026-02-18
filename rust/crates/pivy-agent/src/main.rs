@@ -3,6 +3,7 @@ use ssh_agent_lib::agent::listen;
 use tokio::net::UnixListener;
 
 mod agent;
+mod card;
 
 use agent::{CachedKey, PivyAgent};
 
@@ -44,6 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tokens = ctx.enumerate_tokens()?;
 
     let mut cached_keys = Vec::new();
+    let mut primary_guid = None;
     for token in &tokens {
         let guid = token.guid().clone();
 
@@ -52,6 +54,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if guid.to_hex() != *filter_guid && guid.short_id() != *filter_guid {
                 continue;
             }
+        }
+
+        if primary_guid.is_none() {
+            primary_guid = Some(guid.clone());
         }
 
         let slots = token.read_all_slots().unwrap_or_default();
@@ -89,6 +95,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let listener = UnixListener::bind(&socket_path)?;
     let agent = PivyAgent::new(cached_keys);
+
+    // Spawn card probe loop if we have a primary card
+    if let Some(guid) = primary_guid {
+        let pin_handle = agent.pin_handle();
+        tokio::spawn(card::probe_loop(guid, pin_handle));
+    }
+
     listen(listener, agent).await?;
 
     Ok(())

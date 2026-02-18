@@ -35,6 +35,10 @@ impl PivyAgent {
         }
     }
 
+    pub fn pin_handle(&self) -> Arc<Mutex<Option<String>>> {
+        self.pin.clone()
+    }
+
     fn find_key(keys: &[CachedKey], pubkey: &KeyData) -> Option<CachedKey> {
         keys.iter().find(|k| k.public_key == *pubkey).cloned()
     }
