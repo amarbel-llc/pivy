@@ -3241,7 +3241,10 @@ run_command(const char *path, char *const argv[])
 static int
 cmd_install_service(int ac, char **av)
 {
-	char *exe_path, *exe_dir, *exe_dir_buf;
+	char *exe_path;
+#if defined(__linux__)
+	char *exe_dir, *exe_dir_buf;
+#endif
 	char *det_guid = NULL, *det_cak = NULL;
 	const char *opt_guid = NULL, *opt_cak = NULL;
 	const char *opt_socket = NULL;
@@ -3279,8 +3282,6 @@ cmd_install_service(int ac, char **av)
 	}
 
 	exe_path = get_self_exe_path();
-	exe_dir_buf = strdup(exe_path);
-	exe_dir = dirname(exe_dir_buf);
 
 	home = getenv("HOME");
 	if (home == NULL)
@@ -3295,6 +3296,8 @@ cmd_install_service(int ac, char **av)
 
 #if defined(__linux__)
 	(void)opt_socket;
+	exe_dir_buf = strdup(exe_path);
+	exe_dir = dirname(exe_dir_buf);
 	/* Write config to ~/.config/pivy-agent/default */
 	snprintf(path, sizeof (path),
 	    "%s/.config/pivy-agent", home);
@@ -3461,7 +3464,9 @@ cmd_install_service(int ac, char **av)
 #endif
 
 	free(exe_path);
+#if defined(__linux__)
 	free(exe_dir_buf);
+#endif
 	free(det_guid);
 	free(det_cak);
 	return (0);
