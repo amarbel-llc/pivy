@@ -776,6 +776,7 @@ dependencies = [
  "hex",
  "pivy-common",
  "pivy-piv",
+ "sha2",
  "ssh-agent-lib",
  "ssh-key",
  "thiserror 2.0.18",
