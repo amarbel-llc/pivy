@@ -267,10 +267,10 @@
 
         devShells.default = pkgs.mkShell {
           packages = buildInputs ++ nativeBuildInputs ++ (with pkgs; [
-            bats
             just
             gum
           ]) ++ [
+            batman.packages.${system}.bats
             batman.packages.${system}.bats-libs
             sandcastle.packages.${system}.default
           ];
