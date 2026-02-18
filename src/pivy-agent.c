@@ -113,6 +113,7 @@
 #if defined(__APPLE__)
 #include <PCSC/wintypes.h>
 #include <PCSC/winscard.h>
+#include <mach-o/dyld.h>
 #else
 #include <wintypes.h>
 #include <winscard.h>
@@ -3102,6 +3103,32 @@ check_parent_exists(void)
 		cleanup_socket();
 		_exit(2);
 	}
+}
+
+__attribute__((unused)) static char *
+get_self_exe_path(void)
+{
+	char *path = malloc(PATH_MAX);
+	VERIFY(path != NULL);
+#if defined(__APPLE__)
+	uint32_t size = PATH_MAX;
+	if (_NSGetExecutablePath(path, &size) != 0)
+		fatal("_NSGetExecutablePath failed");
+	char *resolved = realpath(path, NULL);
+	free(path);
+	VERIFY(resolved != NULL);
+	return (resolved);
+#elif defined(__linux__)
+	ssize_t len = readlink("/proc/self/exe", path, PATH_MAX - 1);
+	if (len < 0)
+		fatal("readlink(/proc/self/exe) failed: %s", strerror(errno));
+	path[len] = '\0';
+	return (path);
+#else
+	free(path);
+	fatal("get_self_exe_path: unsupported platform");
+	return (NULL);
+#endif
 }
 
 static void
