@@ -3467,6 +3467,103 @@ cmd_install_service(int ac, char **av)
 	return (0);
 }
 
+static int __attribute__((unused))
+cmd_restart_service(int ac, char **av)
+{
+	(void)ac;
+	(void)av;
+#if defined(__linux__)
+	char *argv[] = {
+	    "systemctl", "--user", "restart",
+	    "pivy-agent@default.service", NULL
+	};
+	if (run_command("systemctl", argv) != 0) {
+		fprintf(stderr, "error: restart failed "
+		    "(is the service installed?)\n");
+		return (1);
+	}
+	fprintf(stderr, "Restarted pivy-agent@default.service\n");
+#elif defined(__APPLE__)
+	char uid_str[32];
+	char label[128];
+	snprintf(uid_str, sizeof (uid_str), "%u", getuid());
+	snprintf(label, sizeof (label),
+	    "gui/%s/net.cooperi.pivy-agent", uid_str);
+	char *argv[] = {
+	    "launchctl", "kickstart", "-k", label, NULL
+	};
+	if (run_command("launchctl", argv) != 0) {
+		fprintf(stderr, "error: restart failed "
+		    "(is the service installed?)\n");
+		return (1);
+	}
+	fprintf(stderr, "Restarted net.cooperi.pivy-agent\n");
+#else
+	fprintf(stderr, "error: unsupported platform\n");
+	return (1);
+#endif
+	return (0);
+}
+
+static int __attribute__((unused))
+cmd_uninstall_service(int ac, char **av)
+{
+	char path[PATH_MAX];
+	char *home;
+
+	(void)ac;
+	(void)av;
+
+	home = getenv("HOME");
+	if (home == NULL)
+		fatal("HOME is not set");
+
+#if defined(__linux__)
+	char *disable_argv[] = {
+	    "systemctl", "--user", "disable", "--now",
+	    "pivy-agent@default.service", NULL
+	};
+	run_command("systemctl", disable_argv);
+
+	snprintf(path, sizeof (path),
+	    "%s/.config/systemd/user/pivy-agent@.service", home);
+	if (unlink(path) == 0)
+		fprintf(stderr, "Removed %s\n", path);
+
+	snprintf(path, sizeof (path),
+	    "%s/.config/pivy-agent/default", home);
+	if (unlink(path) == 0)
+		fprintf(stderr, "Removed %s\n", path);
+
+	char *reload_argv[] = {
+	    "systemctl", "--user", "daemon-reload", NULL
+	};
+	run_command("systemctl", reload_argv);
+
+	fprintf(stderr, "Uninstalled pivy-agent@default.service\n");
+
+#elif defined(__APPLE__)
+	snprintf(path, sizeof (path),
+	    "%s/Library/LaunchAgents/net.cooperi.pivy-agent.plist",
+	    home);
+
+	char *unload_argv[] = {
+	    "launchctl", "unload", path, NULL
+	};
+	run_command("launchctl", unload_argv);
+
+	if (unlink(path) == 0)
+		fprintf(stderr, "Removed %s\n", path);
+
+	fprintf(stderr, "Uninstalled net.cooperi.pivy-agent\n");
+
+#else
+	fprintf(stderr, "error: unsupported platform\n");
+	return (1);
+#endif
+	return (0);
+}
+
 static void
 usage(void)
 {
