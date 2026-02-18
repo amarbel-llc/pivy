@@ -3105,7 +3105,7 @@ check_parent_exists(void)
 	}
 }
 
-__attribute__((unused)) static char *
+static char *
 get_self_exe_path(void)
 {
 	char *path = malloc(PATH_MAX);
@@ -3131,7 +3131,7 @@ get_self_exe_path(void)
 #endif
 }
 
-__attribute__((unused)) static void
+static void
 detect_card(char **out_guid, char **out_cak)
 {
 	struct piv_ctx *dctx;
@@ -3218,6 +3218,183 @@ detect_card(char **out_guid, char **out_cak)
 
 	piv_release(tks);
 	piv_close(dctx);
+}
+
+__attribute__((unused)) static int
+run_command(const char *path, char *const argv[])
+{
+	pid_t pid;
+	int status;
+
+	pid = fork();
+	if (pid < 0)
+		fatal("fork failed: %s", strerror(errno));
+	if (pid == 0) {
+		execvp(path, argv);
+		fatal("exec %s failed: %s", path, strerror(errno));
+	}
+	if (waitpid(pid, &status, 0) < 0)
+		fatal("waitpid failed: %s", strerror(errno));
+	return (WIFEXITED(status) ? WEXITSTATUS(status) : 1);
+}
+
+__attribute__((unused)) static int
+cmd_install_service(int ac, char **av)
+{
+	char *exe_path, *exe_dir;
+	char *det_guid = NULL, *det_cak = NULL;
+	const char *opt_guid = NULL, *opt_cak = NULL;
+	const char *opt_socket = NULL;
+	boolean_t opt_allcard = B_FALSE;
+	char path[PATH_MAX];
+	char *home;
+	FILE *f;
+	int ch;
+
+	while ((ch = getopt(ac, av, "Ag:K:a:")) != -1) {
+		switch (ch) {
+		case 'A':
+			opt_allcard = B_TRUE;
+			break;
+		case 'g':
+			opt_guid = optarg;
+			break;
+		case 'K':
+			opt_cak = optarg;
+			break;
+		case 'a':
+			opt_socket = optarg;
+			break;
+		default:
+			fprintf(stderr,
+			    "usage: pivy-agent install-service "
+			    "[-g guid] [-K cak] [-A] [-a socket]\n");
+			return (1);
+		}
+	}
+
+	(void)opt_socket;
+
+	if (opt_guid != NULL && opt_allcard) {
+		fprintf(stderr, "error: -A and -g are mutually exclusive\n");
+		return (1);
+	}
+
+	exe_path = get_self_exe_path();
+	exe_dir = strdup(exe_path);
+	exe_dir = dirname(exe_dir);
+
+	home = getenv("HOME");
+	if (home == NULL)
+		fatal("HOME is not set");
+
+	if (!opt_allcard && opt_guid == NULL) {
+		detect_card(&det_guid, &det_cak);
+		opt_guid = det_guid;
+		if (opt_cak == NULL && det_cak != NULL)
+			opt_cak = det_cak;
+	}
+
+#if defined(__linux__)
+	/* Write config to ~/.config/pivy-agent/default */
+	snprintf(path, sizeof (path),
+	    "%s/.config/pivy-agent", home);
+	if (mkdir(path, 0700) != 0 && errno != EEXIST)
+		fatal("mkdir %s: %s", path, strerror(errno));
+
+	snprintf(path, sizeof (path),
+	    "%s/.config/pivy-agent/default", home);
+	f = fopen(path, "w");
+	if (f == NULL)
+		fatal("fopen %s: %s", path, strerror(errno));
+
+	if (opt_allcard) {
+		fprintf(f, "PIV_AGENT_OPTS=-A\n");
+	} else {
+		fprintf(f, "PIV_AGENT_GUID=%s\n", opt_guid);
+		if (opt_cak != NULL)
+			fprintf(f, "PIV_AGENT_CAK=%s\n", opt_cak);
+	}
+	fclose(f);
+	fprintf(stderr, "Wrote %s\n", path);
+
+	/* Write systemd unit to ~/.config/systemd/user/ */
+	snprintf(path, sizeof (path),
+	    "%s/.config/systemd/user", home);
+	if (mkdir(path, 0700) != 0 && errno != EEXIST) {
+		/* Try creating parent first */
+		char parent[PATH_MAX];
+		snprintf(parent, sizeof (parent),
+		    "%s/.config/systemd", home);
+		if (mkdir(parent, 0700) != 0 && errno != EEXIST)
+			fatal("mkdir %s: %s", parent, strerror(errno));
+		if (mkdir(path, 0700) != 0 && errno != EEXIST)
+			fatal("mkdir %s: %s", path, strerror(errno));
+	}
+
+	snprintf(path, sizeof (path),
+	    "%s/.config/systemd/user/pivy-agent@.service", home);
+	f = fopen(path, "w");
+	if (f == NULL)
+		fatal("fopen %s: %s", path, strerror(errno));
+
+	fprintf(f,
+	    "[Unit]\n"
+	    "Description=PIV SSH Agent\n"
+	    "\n"
+	    "[Service]\n"
+	    "Environment=SSH_AUTH_SOCK=%%t/piv-ssh-%%I.socket\n"
+	    "Environment=PIV_AGENT_OPTS=\n"
+	    "Environment=PIV_SLOTS=all\n"
+	    "EnvironmentFile=%%h/.config/pivy-agent/%%I\n"
+	    "ExecStartPre=/bin/rm -f $SSH_AUTH_SOCK\n"
+	    "ExecStart=%s/pivy-agent -i -a $SSH_AUTH_SOCK "
+	    "-g $PIV_AGENT_GUID -K ${PIV_AGENT_CAK} "
+	    "-S ${PIV_SLOTS} $PIV_AGENT_OPTS\n"
+	    "Restart=always\n"
+	    "RestartSec=3\n"
+	    "\n"
+	    "[Install]\n"
+	    "WantedBy=default.target\n"
+	    "DefaultInstance=default\n",
+	    exe_dir);
+	fclose(f);
+	fprintf(stderr, "Wrote %s\n", path);
+
+	/* Enable and start the service */
+	char *reload_argv[] = {
+	    "systemctl", "--user", "daemon-reload", NULL
+	};
+	char *enable_argv[] = {
+	    "systemctl", "--user", "enable", "--now",
+	    "pivy-agent@default.service", NULL
+	};
+
+	if (run_command("systemctl", reload_argv) != 0)
+		fprintf(stderr, "warning: systemctl daemon-reload failed\n");
+	if (run_command("systemctl", enable_argv) != 0) {
+		fprintf(stderr, "error: failed to enable service\n");
+		return (1);
+	}
+
+	fprintf(stderr,
+	    "Installed and started pivy-agent@default.service\n"
+	    "Socket: $XDG_RUNTIME_DIR/piv-ssh-default.socket\n");
+
+#elif defined(__APPLE__)
+	/* macOS implementation in next task */
+	fprintf(stderr, "error: macOS not yet supported\n");
+	return (1);
+#else
+	fprintf(stderr, "error: unsupported platform\n");
+	return (1);
+#endif
+
+	free(exe_path);
+	free(exe_dir);
+	free(det_guid);
+	free(det_cak);
+	return (0);
 }
 
 static void
