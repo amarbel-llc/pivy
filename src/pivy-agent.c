@@ -3287,6 +3287,47 @@ cmd_install_service(int ac, char **av)
 	if (home == NULL)
 		fatal("HOME is not set");
 
+	if (opt_socket == NULL) {
+		const char *state_home = getenv("XDG_STATE_HOME");
+		if (state_home != NULL) {
+			snprintf(path, sizeof (path),
+			    "%s/ssh", state_home);
+		} else {
+			snprintf(path, sizeof (path),
+			    "%s/.local/state/ssh", home);
+		}
+		if (mkdir(path, 0700) != 0 && errno != EEXIST) {
+			/* Try creating parents */
+			char parent[PATH_MAX];
+			if (state_home != NULL) {
+				snprintf(parent, sizeof (parent),
+				    "%s", state_home);
+			} else {
+				snprintf(parent, sizeof (parent),
+				    "%s/.local", home);
+				if (mkdir(parent, 0700) != 0 && errno != EEXIST)
+					fatal("mkdir %s: %s", parent,
+					    strerror(errno));
+				snprintf(parent, sizeof (parent),
+				    "%s/.local/state", home);
+			}
+			if (mkdir(parent, 0700) != 0 && errno != EEXIST)
+				fatal("mkdir %s: %s", parent,
+				    strerror(errno));
+			if (mkdir(path, 0700) != 0 && errno != EEXIST)
+				fatal("mkdir %s: %s", path,
+				    strerror(errno));
+		}
+		if (state_home != NULL) {
+			snprintf(path, sizeof (path),
+			    "%s/ssh/pivy-agent.sock", state_home);
+		} else {
+			snprintf(path, sizeof (path),
+			    "%s/.local/state/ssh/pivy-agent.sock", home);
+		}
+		opt_socket = strdup(path);
+	}
+
 	if (!opt_allcard && opt_guid == NULL) {
 		detect_card(&det_guid, &det_cak);
 		opt_guid = det_guid;
@@ -3295,7 +3336,6 @@ cmd_install_service(int ac, char **av)
 	}
 
 #if defined(__linux__)
-	(void)opt_socket;
 	exe_dir_buf = strdup(exe_path);
 	exe_dir = dirname(exe_dir_buf);
 	/* Write config to ~/.config/pivy-agent/default */
@@ -3345,7 +3385,7 @@ cmd_install_service(int ac, char **av)
 	    "Description=PIV SSH Agent\n"
 	    "\n"
 	    "[Service]\n"
-	    "Environment=SSH_AUTH_SOCK=%%t/piv-ssh-%%I.socket\n"
+	    "Environment=SSH_AUTH_SOCK=%s\n"
 	    "Environment=PIV_AGENT_OPTS=\n"
 	    "Environment=PIV_SLOTS=all\n"
 	    "EnvironmentFile=%%h/.config/pivy-agent/%%I\n"
@@ -3359,7 +3399,7 @@ cmd_install_service(int ac, char **av)
 	    "[Install]\n"
 	    "WantedBy=default.target\n"
 	    "DefaultInstance=default\n",
-	    exe_dir);
+	    opt_socket, exe_dir);
 	fclose(f);
 	fprintf(stderr, "Wrote %s\n", path);
 
@@ -3381,15 +3421,9 @@ cmd_install_service(int ac, char **av)
 
 	fprintf(stderr,
 	    "Installed and started pivy-agent@default.service\n"
-	    "Socket: $XDG_RUNTIME_DIR/piv-ssh-default.socket\n");
+	    "Socket: %s\n", opt_socket);
 
 #elif defined(__APPLE__)
-	if (opt_socket == NULL) {
-		snprintf(path, sizeof (path),
-		    "%s/.ssh/pivy-agent.sock", home);
-		opt_socket = strdup(path);
-	}
-
 	snprintf(path, sizeof (path),
 	    "%s/Library/LaunchAgents", home);
 	if (mkdir(path, 0700) != 0 && errno != EEXIST)

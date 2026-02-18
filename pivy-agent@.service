@@ -2,7 +2,7 @@
 Description=PIV SSH Agent
 
 [Service]
-Environment=SSH_AUTH_SOCK=%t/piv-ssh-%I.socket
+Environment=SSH_AUTH_SOCK=%h/.local/state/ssh/pivy-agent.sock
 Environment=PIV_AGENT_OPTS=
 Environment=PIV_SLOTS=all
 EnvironmentFile=%h/.config/pivy-agent/%I

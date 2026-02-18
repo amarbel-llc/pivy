@@ -13,7 +13,7 @@
         <string>@@CAK@@</string>
         <string>-i</string>
         <string>-a</string>
-        <string>@@HOME@@/.ssh/pivy-agent.sock</string>
+        <string>@@HOME@@/.local/state/ssh/pivy-agent.sock</string>
     </array>
     <key>StandardErrorPath</key>
     <string>@@HOME@@/Library/Logs/pivy-agent.log</string>
