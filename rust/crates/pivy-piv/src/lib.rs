@@ -6,5 +6,6 @@ pub mod slot;
 pub mod tlv;
 pub mod token;
 
+pub use context::PivContext;
 pub use error::PivError;
 pub use guid::Guid;
