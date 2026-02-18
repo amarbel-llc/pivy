@@ -1,11 +1,15 @@
 bats_timeout := "5"
 
+# TODO: re-enable sandcastle wrapper once "Failed to create bridge sockets"
+# is resolved (sandcastle 1fbaa23). Replace `bats` with
+# `./bin/run-sandcastle-bats.bash bats` in the recipes below.
+
 test-targets *targets="*.bats":
-  BATS_TEST_TIMEOUT="{{bats_timeout}}" ./bin/run-sandcastle-bats.bash \
+  BATS_TEST_TIMEOUT="{{bats_timeout}}" \
     bats --tap --jobs {{num_cpus()}} {{targets}}
 
 test-tags *tags:
-  BATS_TEST_TIMEOUT="{{bats_timeout}}" ./bin/run-sandcastle-bats.bash \
+  BATS_TEST_TIMEOUT="{{bats_timeout}}" \
     bats --tap --jobs {{num_cpus()}} --filter-tags {{tags}} *.bats
 
 test: (test-targets "*.bats")
