@@ -4,7 +4,10 @@ build:
 test-bats: build
   PATH="$(readlink -f ./result)/bin:$PATH" just zz-tests_bats/test
 
-test: test-bats
+test-bats-rust: build-nix-rust
+  PIVY_AGENT_RUST="$(readlink -f ./result-rust)/bin/pivy-agent" just zz-tests_bats/test-rust
+
+test: test-bats test-bats-rust
 
 build-rust:
   cd rust && cargo build
@@ -12,13 +15,13 @@ build-rust:
 build-rust-release:
   cd rust && cargo build --release
 
-build-nix:
-  nix build .#pivy-rust
+build-nix-rust:
+  nix build .#pivy-rust -o result-rust
 
-test:
+test-rust:
   cd rust && cargo test
 
-test-verbose:
+test-rust-verbose:
   cd rust && cargo test -- --nocapture
 
 fmt:

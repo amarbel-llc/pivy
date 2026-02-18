@@ -13,3 +13,5 @@ test-tags *tags:
     bats --tap --jobs {{num_cpus()}} --filter-tags {{tags}} *.bats
 
 test: (test-targets "*.bats")
+
+test-rust: (test-targets "pivy_agent_rust.bats")
