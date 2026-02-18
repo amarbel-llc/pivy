@@ -35,6 +35,33 @@ function install_service_mutually_exclusive_A_and_g_fails { # @test
   assert_output --partial "-A and -g are mutually exclusive"
 }
 
+function install_service_writes_plist_with_socket_path { # @test
+  local home="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$home/Library"
+  local plist="$home/Library/LaunchAgents/net.cooperi.pivy-agent.plist"
+
+  # launchctl load fails in test sandbox, but plist should be written
+  HOME="$home" run pivy-agent install-service -A -a /tmp/first.sock
+  assert [ -f "$plist" ]
+  run grep '/tmp/first.sock' "$plist"
+  assert_success
+}
+
+function install_service_reinstall_updates_socket_path { # @test
+  local home="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$home/Library"
+  local plist="$home/Library/LaunchAgents/net.cooperi.pivy-agent.plist"
+
+  HOME="$home" run pivy-agent install-service -A -a /tmp/first.sock
+  assert [ -f "$plist" ]
+
+  HOME="$home" run pivy-agent install-service -A -a /tmp/second.sock
+  run grep '/tmp/second.sock' "$plist"
+  assert_success
+  run grep '/tmp/first.sock' "$plist"
+  assert_failure
+}
+
 # --- restart-service ---
 
 function restart_service_fails_without_service_installed { # @test
