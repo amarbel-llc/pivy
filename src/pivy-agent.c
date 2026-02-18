@@ -3273,8 +3273,6 @@ cmd_install_service(int ac, char **av)
 		}
 	}
 
-	(void)opt_socket;
-
 	if (opt_guid != NULL && opt_allcard) {
 		fprintf(stderr, "error: -A and -g are mutually exclusive\n");
 		return (1);
@@ -3296,6 +3294,7 @@ cmd_install_service(int ac, char **av)
 	}
 
 #if defined(__linux__)
+	(void)opt_socket;
 	/* Write config to ~/.config/pivy-agent/default */
 	snprintf(path, sizeof (path),
 	    "%s/.config/pivy-agent", home);
@@ -3382,9 +3381,80 @@ cmd_install_service(int ac, char **av)
 	    "Socket: $XDG_RUNTIME_DIR/piv-ssh-default.socket\n");
 
 #elif defined(__APPLE__)
-	/* macOS implementation in next task */
-	fprintf(stderr, "error: macOS not yet supported\n");
-	return (1);
+	if (opt_socket == NULL) {
+		snprintf(path, sizeof (path),
+		    "%s/.ssh/pivy-agent.sock", home);
+		opt_socket = strdup(path);
+	}
+
+	snprintf(path, sizeof (path),
+	    "%s/Library/LaunchAgents", home);
+	if (mkdir(path, 0700) != 0 && errno != EEXIST)
+		fatal("mkdir %s: %s", path, strerror(errno));
+
+	snprintf(path, sizeof (path),
+	    "%s/Library/LaunchAgents/net.cooperi.pivy-agent.plist", home);
+	f = fopen(path, "w");
+	if (f == NULL)
+		fatal("fopen %s: %s", path, strerror(errno));
+
+	fprintf(f,
+	    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+	    "<!DOCTYPE plist PUBLIC \"-//Apple Computer//DTD PLIST 1.0//EN\""
+	    " \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+	    "<plist version=\"1.0\">\n"
+	    "<dict>\n"
+	    "    <key>Label</key>\n"
+	    "    <string>net.cooperi.pivy-agent</string>\n"
+	    "    <key>ProgramArguments</key>\n"
+	    "    <array>\n"
+	    "        <string>%s</string>\n",
+	    exe_path);
+
+	if (opt_allcard) {
+		fprintf(f,
+		    "        <string>-A</string>\n");
+	} else {
+		fprintf(f,
+		    "        <string>-g</string>\n"
+		    "        <string>%s</string>\n",
+		    opt_guid);
+		if (opt_cak != NULL) {
+			fprintf(f,
+			    "        <string>-K</string>\n"
+			    "        <string>%s</string>\n",
+			    opt_cak);
+		}
+	}
+
+	fprintf(f,
+	    "        <string>-i</string>\n"
+	    "        <string>-a</string>\n"
+	    "        <string>%s</string>\n"
+	    "    </array>\n"
+	    "    <key>StandardErrorPath</key>\n"
+	    "    <string>%s/Library/Logs/pivy-agent.log</string>\n"
+	    "    <key>RunAtLoad</key>\n"
+	    "    <true/>\n"
+	    "    <key>KeepAlive</key>\n"
+	    "    <true/>\n"
+	    "</dict>\n"
+	    "</plist>\n",
+	    opt_socket, home);
+	fclose(f);
+	fprintf(stderr, "Wrote %s\n", path);
+
+	char *load_argv[] = {
+	    "launchctl", "load", path, NULL
+	};
+	if (run_command("launchctl", load_argv) != 0) {
+		fprintf(stderr, "error: launchctl load failed\n");
+		return (1);
+	}
+
+	fprintf(stderr,
+	    "Installed and started net.cooperi.pivy-agent\n"
+	    "Socket: %s\n", opt_socket);
 #else
 	fprintf(stderr, "error: unsupported platform\n");
 	return (1);
