@@ -3447,7 +3447,7 @@ cmd_install_service(int ac, char **av)
 	fprintf(f,
 	    "ExecStartPre=/bin/rm -f $SSH_AUTH_SOCK\n"
 	    "ExecStart=%s/pivy-agent -i -a $SSH_AUTH_SOCK "
-	    "-g $PIV_AGENT_GUID %s"
+	    "%s%s"
 	    "-S ${PIV_SLOTS} $PIV_AGENT_OPTS\n"
 	    "Restart=always\n"
 	    "RestartSec=3\n"
@@ -3456,6 +3456,7 @@ cmd_install_service(int ac, char **av)
 	    "WantedBy=default.target\n"
 	    "DefaultInstance=default\n",
 	    exe_dir,
+	    opt_allcard ? "" : "-g $PIV_AGENT_GUID ",
 	    opt_cak != NULL ? "-K ${PIV_AGENT_CAK} " : "");
 	fclose(f);
 	fprintf(stderr, "Wrote %s\n", path);
