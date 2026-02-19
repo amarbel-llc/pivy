@@ -3391,7 +3391,7 @@ cmd_install_service(int ac, char **av)
 	    "EnvironmentFile=%%h/.config/pivy-agent/%%I\n"
 	    "ExecStartPre=/bin/rm -f $SSH_AUTH_SOCK\n"
 	    "ExecStart=%s/pivy-agent -i -a $SSH_AUTH_SOCK "
-	    "-g $PIV_AGENT_GUID -K ${PIV_AGENT_CAK} "
+	    "-g $PIV_AGENT_GUID %s"
 	    "-S ${PIV_SLOTS} $PIV_AGENT_OPTS\n"
 	    "Restart=always\n"
 	    "RestartSec=3\n"
@@ -3399,7 +3399,8 @@ cmd_install_service(int ac, char **av)
 	    "[Install]\n"
 	    "WantedBy=default.target\n"
 	    "DefaultInstance=default\n",
-	    opt_socket, exe_dir);
+	    opt_socket, exe_dir,
+	    opt_cak != NULL ? "-K ${PIV_AGENT_CAK} " : "");
 	fclose(f);
 	fprintf(stderr, "Wrote %s\n", path);
 
