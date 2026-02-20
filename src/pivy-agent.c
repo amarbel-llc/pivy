@@ -3254,6 +3254,7 @@ static int
 cmd_install_service(int ac, char **av)
 {
 	char *exe_path;
+	char libexec_dir[PATH_MAX];
 #if defined(__linux__)
 	char *exe_dir, *exe_dir_buf;
 #endif
@@ -3261,10 +3262,29 @@ cmd_install_service(int ac, char **av)
 	const char *opt_guid = NULL, *opt_cak = NULL;
 	const char *opt_socket = NULL;
 	boolean_t opt_allcard = B_FALSE;
+	boolean_t opt_no_askpass = B_FALSE;
+	boolean_t opt_no_notify = B_FALSE;
 	char path[PATH_MAX];
 	char *home;
 	FILE *f;
 	int ch;
+
+	/* Pre-scan for long options */
+	int i, j;
+	for (i = 0, j = 0; i < ac; i++) {
+		if (strcmp(av[i], "--no-askpass") == 0) {
+			opt_no_askpass = B_TRUE;
+		} else if (strcmp(av[i], "--no-notify") == 0) {
+			opt_no_notify = B_TRUE;
+		} else {
+			av[j++] = av[i];
+		}
+	}
+	ac = j;
+#if defined(__APPLE__) || defined(__FreeBSD__)
+	optreset = 1;
+#endif
+	optind = 1;
 
 	while ((ch = getopt(ac, av, "Ag:K:a:")) != -1) {
 		switch (ch) {
@@ -3283,7 +3303,8 @@ cmd_install_service(int ac, char **av)
 		default:
 			fprintf(stderr,
 			    "usage: pivy-agent install-service "
-			    "[-g guid] [-K cak] [-A] [-a socket]\n");
+			    "[-g guid] [-K cak] [-A] [-a socket]\n"
+			    "       [--no-askpass] [--no-notify]\n");
 			return (1);
 		}
 	}
@@ -3294,6 +3315,15 @@ cmd_install_service(int ac, char **av)
 	}
 
 	exe_path = get_self_exe_path();
+
+	{
+		char *tmp = strdup(exe_path);
+		char *bindir = dirname(tmp);
+		char *prefix = dirname(bindir);
+		snprintf(libexec_dir, sizeof (libexec_dir),
+		    "%s/libexec/pivy", prefix);
+		free(tmp);
+	}
 
 	home = getenv("HOME");
 	if (home == NULL)
@@ -3400,7 +3430,21 @@ cmd_install_service(int ac, char **av)
 	    "Environment=SSH_AUTH_SOCK=%s\n"
 	    "Environment=PIV_AGENT_OPTS=\n"
 	    "Environment=PIV_SLOTS=all\n"
-	    "EnvironmentFile=%%h/.config/pivy-agent/%%I\n"
+	    "EnvironmentFile=%%h/.config/pivy-agent/%%I\n",
+	    opt_socket);
+	if (!opt_no_askpass) {
+		fprintf(f,
+		    "Environment=SSH_ASKPASS=%s/pivy-askpass\n"
+		    "Environment=SSH_ASKPASS_REQUIRE=force\n"
+		    "Environment=SSH_CONFIRM=%s/pivy-askpass\n",
+		    libexec_dir, libexec_dir);
+	}
+	if (!opt_no_notify) {
+		fprintf(f,
+		    "Environment=SSH_NOTIFY_SEND=%s/pivy-notify\n",
+		    libexec_dir);
+	}
+	fprintf(f,
 	    "ExecStartPre=/bin/rm -f $SSH_AUTH_SOCK\n"
 	    "ExecStart=%s/pivy-agent -i -a $SSH_AUTH_SOCK "
 	    "-g $PIV_AGENT_GUID %s"
@@ -3411,7 +3455,7 @@ cmd_install_service(int ac, char **av)
 	    "[Install]\n"
 	    "WantedBy=default.target\n"
 	    "DefaultInstance=default\n",
-	    opt_socket, exe_dir,
+	    exe_dir,
 	    opt_cak != NULL ? "-K ${PIV_AGENT_CAK} " : "");
 	fclose(f);
 	fprintf(stderr, "Wrote %s\n", path);
@@ -3497,14 +3541,38 @@ cmd_install_service(int ac, char **av)
 	    "        <string>%s</string>\n"
 	    "    </array>\n"
 	    "    <key>StandardErrorPath</key>\n"
-	    "    <string>%s/Library/Logs/pivy-agent.log</string>\n"
+	    "    <string>%s/Library/Logs/pivy-agent.log</string>\n",
+	    opt_socket, home);
+	if (!opt_no_askpass || !opt_no_notify) {
+		fprintf(f,
+		    "    <key>EnvironmentVariables</key>\n"
+		    "    <dict>\n");
+		if (!opt_no_askpass) {
+			fprintf(f,
+			    "        <key>SSH_ASKPASS</key>\n"
+			    "        <string>%s/pivy-askpass</string>\n"
+			    "        <key>SSH_ASKPASS_REQUIRE</key>\n"
+			    "        <string>force</string>\n"
+			    "        <key>SSH_CONFIRM</key>\n"
+			    "        <string>%s/pivy-askpass</string>\n",
+			    libexec_dir, libexec_dir);
+		}
+		if (!opt_no_notify) {
+			fprintf(f,
+			    "        <key>SSH_NOTIFY_SEND</key>\n"
+			    "        <string>%s/pivy-notify</string>\n",
+			    libexec_dir);
+		}
+		fprintf(f,
+		    "    </dict>\n");
+	}
+	fprintf(f,
 	    "    <key>RunAtLoad</key>\n"
 	    "    <true/>\n"
 	    "    <key>KeepAlive</key>\n"
 	    "    <true/>\n"
 	    "</dict>\n"
-	    "</plist>\n",
-	    opt_socket, home);
+	    "</plist>\n");
 	fclose(f);
 	fprintf(stderr, "Wrote %s\n", path);
 

@@ -62,6 +62,65 @@ function install_service_reinstall_updates_socket_path { # @test
   assert_failure
 }
 
+function install_service_plist_contains_askpass_env { # @test
+  local home="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$home/Library"
+  local plist="$home/Library/LaunchAgents/net.cooperi.pivy-agent.plist"
+
+  HOME="$home" run pivy-agent install-service -A -a /tmp/test.sock
+  assert [ -f "$plist" ]
+  run grep 'SSH_ASKPASS' "$plist"
+  assert_success
+  run grep 'SSH_ASKPASS_REQUIRE' "$plist"
+  assert_success
+  run grep 'force' "$plist"
+  assert_success
+}
+
+function install_service_plist_contains_notify_env { # @test
+  local home="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$home/Library"
+  local plist="$home/Library/LaunchAgents/net.cooperi.pivy-agent.plist"
+
+  HOME="$home" run pivy-agent install-service -A -a /tmp/test.sock
+  assert [ -f "$plist" ]
+  run grep 'SSH_NOTIFY_SEND' "$plist"
+  assert_success
+}
+
+function install_service_plist_contains_confirm_env { # @test
+  local home="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$home/Library"
+  local plist="$home/Library/LaunchAgents/net.cooperi.pivy-agent.plist"
+
+  HOME="$home" run pivy-agent install-service -A -a /tmp/test.sock
+  assert [ -f "$plist" ]
+  run grep 'SSH_CONFIRM' "$plist"
+  assert_success
+}
+
+function install_service_no_askpass_omits_askpass_env { # @test
+  local home="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$home/Library"
+  local plist="$home/Library/LaunchAgents/net.cooperi.pivy-agent.plist"
+
+  HOME="$home" run pivy-agent install-service -A -a /tmp/test.sock --no-askpass
+  assert [ -f "$plist" ]
+  run grep 'SSH_ASKPASS' "$plist"
+  assert_failure
+}
+
+function install_service_no_notify_omits_notify_env { # @test
+  local home="$BATS_TEST_TMPDIR/home"
+  mkdir -p "$home/Library"
+  local plist="$home/Library/LaunchAgents/net.cooperi.pivy-agent.plist"
+
+  HOME="$home" run pivy-agent install-service -A -a /tmp/test.sock --no-notify
+  assert [ -f "$plist" ]
+  run grep 'SSH_NOTIFY_SEND' "$plist"
+  assert_failure
+}
+
 # --- restart-service ---
 
 function restart_service_fails_without_service_installed { # @test

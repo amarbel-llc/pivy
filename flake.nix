@@ -287,6 +287,24 @@
                 --replace-fail '/opt/pivy/bin/pivy-agent' "$out/bin/pivy-agent"
             ''}
 
+            # Install askpass/notify wrapper scripts with baked-in paths
+            mkdir -p $out/libexec/pivy
+
+            cat > $out/libexec/pivy/pivy-askpass <<ASKPASS
+            #!/bin/sh
+            exec ${pkgs.zenity}/bin/zenity --password --title="\$1"
+            ASKPASS
+            chmod +x $out/libexec/pivy/pivy-askpass
+
+            cat > $out/libexec/pivy/pivy-notify <<NOTIFY
+            #!/bin/sh
+            case "\$(uname)" in
+              Darwin) exec ${if pkgs.stdenv.isDarwin then "${pkgs.terminal-notifier}/bin/terminal-notifier" else "terminal-notifier"} -title "\$1" -message "\$2" ;;
+              *)      exec ${if pkgs.stdenv.isLinux then "${pkgs.libnotify}/bin/notify-send" else "notify-send"} "\$1" "\$2" ;;
+            esac
+            NOTIFY
+            chmod +x $out/libexec/pivy/pivy-notify
+
             runHook postInstall
           '';
 
