@@ -2428,8 +2428,20 @@ process_lock_agent(socket_entry_t *e, int lock)
 		if ((err = valid_pin(passwd)))
 			goto out;
 
-		if ((err = agent_piv_open()))
-			goto out;
+		if (allcard_mode) {
+			if ((err = agent_enumerate_all()))
+				goto out;
+			if (ks == NULL) {
+				err = errf("NotFoundError", NULL,
+				    "No PIV tokens found on the system");
+				goto out;
+			}
+			if ((err = agent_piv_open_token(ks)))
+				goto out;
+		} else {
+			if ((err = agent_piv_open()))
+				goto out;
+		}
 
 		err = piv_verify_pin(selk, piv_token_default_auth(selk),
 		    passwd, &retries, B_FALSE);
