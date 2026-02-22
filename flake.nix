@@ -3,7 +3,7 @@
     nixpkgs.url = "github:NixOS/nixpkgs/23d72dabcb3b12469f57b37170fcbc1789bd7457";
     nixpkgs-master.url = "github:NixOS/nixpkgs/b28c4999ed71543e71552ccfd0d7e68c581ba7e9";
     utils.url = "https://flakehub.com/f/numtide/flake-utils/0.1.102";
-    batman.url = "github:amarbel-llc/batman";
+    purse-first.url = "github:amarbel-llc/purse-first";
     sandcastle.url = "github:amarbel-llc/sandcastle";
     devenv-rust.url = "github:friedenberg/eng?dir=devenvs/rust";
   };
@@ -14,7 +14,7 @@
       nixpkgs,
       nixpkgs-master,
       utils,
-      batman,
+      purse-first,
       sandcastle,
       devenv-rust,
     }:
@@ -328,8 +328,7 @@
             just
             gum
           ]) ++ [
-            batman.packages.${system}.bats
-            batman.packages.${system}.bats-libs
+            purse-first.packages.${system}.batman
             sandcastle.packages.${system}.default
           ];
         };
