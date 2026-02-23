@@ -1,32 +1,5 @@
 {
   "nodes": {
-    "bats": {
-      "inputs": {
-        "nixpkgs": [
-          "purse-first",
-          "nixpkgs"
-        ],
-        "nixpkgs-master": [
-          "purse-first",
-          "nixpkgs-master"
-        ],
-        "utils": [
-          "purse-first",
-          "utils"
-        ]
-      },
-      "locked": {
-        "path": "./devenvs/bats",
-        "type": "path"
-      },
-      "original": {
-        "path": "./devenvs/bats",
-        "type": "path"
-      },
-      "parent": [
-        "purse-first"
-      ]
-    },
     "crane": {
       "locked": {
         "lastModified": 1771796463,
@@ -118,35 +91,6 @@
         "dir": "devenvs/node",
         "owner": "amarbel-llc",
         "repo": "eng",
-        "type": "github"
-      }
-    },
-    "devenv-rust": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ],
-        "nixpkgs-master": [
-          "nixpkgs-master"
-        ],
-        "rust-overlay": "rust-overlay",
-        "utils": [
-          "utils"
-        ]
-      },
-      "locked": {
-        "dir": "devenvs/rust",
-        "lastModified": 1771867764,
-        "narHash": "sha256-Z850GN3tvjsRC0Ve2DISjRlcpjH0BemzCuOnGa+DBKE=",
-        "owner": "amarbel-llc",
-        "repo": "purse-first",
-        "rev": "21006f6788371a0088511fc79f29f2c21c7b4861",
-        "type": "github"
-      },
-      "original": {
-        "dir": "devenvs/rust",
-        "owner": "amarbel-llc",
-        "repo": "purse-first",
         "type": "github"
       }
     },
@@ -251,40 +195,11 @@
         "type": "github"
       }
     },
-    "go": {
-      "inputs": {
-        "gomod2nix": "gomod2nix",
-        "nixpkgs": [
-          "purse-first",
-          "nixpkgs"
-        ],
-        "nixpkgs-master": [
-          "purse-first",
-          "nixpkgs-master"
-        ],
-        "utils": [
-          "purse-first",
-          "utils"
-        ]
-      },
-      "locked": {
-        "path": "./devenvs/go",
-        "type": "path"
-      },
-      "original": {
-        "path": "./devenvs/go",
-        "type": "path"
-      },
-      "parent": [
-        "purse-first"
-      ]
-    },
     "gomod2nix": {
       "inputs": {
         "flake-utils": "flake-utils",
         "nixpkgs": [
           "purse-first",
-          "go",
           "nixpkgs"
         ]
       },
@@ -396,29 +311,26 @@
     },
     "purse-first": {
       "inputs": {
-        "bats": "bats",
         "crane": "crane",
         "fh": "fh",
-        "go": "go",
+        "gomod2nix": "gomod2nix",
         "nixpkgs": [
           "nixpkgs"
         ],
         "nixpkgs-master": [
           "nixpkgs-master"
         ],
-        "rust": "rust",
-        "rust-overlay": "rust-overlay_3",
-        "shell": "shell",
+        "rust-overlay": "rust-overlay",
         "utils": [
           "utils"
         ]
       },
       "locked": {
-        "lastModified": 1771867764,
-        "narHash": "sha256-Z850GN3tvjsRC0Ve2DISjRlcpjH0BemzCuOnGa+DBKE=",
+        "lastModified": 1771875715,
+        "narHash": "sha256-gXh1uTc3mye4vouXQleN0uTmhkddv5lx7RuJCDU0Zd0=",
         "owner": "amarbel-llc",
         "repo": "purse-first",
-        "rev": "21006f6788371a0088511fc79f29f2c21c7b4861",
+        "rev": "b2023c69f6cc4d511e5244a3c318b93f0ed25a70",
         "type": "github"
       },
       "original": {
@@ -429,41 +341,12 @@
     },
     "root": {
       "inputs": {
-        "devenv-rust": "devenv-rust",
         "nixpkgs": "nixpkgs",
         "nixpkgs-master": "nixpkgs-master",
         "purse-first": "purse-first",
         "sandcastle": "sandcastle",
         "utils": "utils_3"
       }
-    },
-    "rust": {
-      "inputs": {
-        "nixpkgs": [
-          "purse-first",
-          "nixpkgs"
-        ],
-        "nixpkgs-master": [
-          "purse-first",
-          "nixpkgs-master"
-        ],
-        "rust-overlay": "rust-overlay_2",
-        "utils": [
-          "purse-first",
-          "utils"
-        ]
-      },
-      "locked": {
-        "path": "./devenvs/rust",
-        "type": "path"
-      },
-      "original": {
-        "path": "./devenvs/rust",
-        "type": "path"
-      },
-      "parent": [
-        "purse-first"
-      ]
     },
     "rust-analyzer-src": {
       "flake": false,
@@ -500,49 +383,6 @@
       }
     },
     "rust-overlay": {
-      "inputs": {
-        "nixpkgs": [
-          "devenv-rust",
-          "nixpkgs-master"
-        ]
-      },
-      "locked": {
-        "lastModified": 1771816254,
-        "narHash": "sha256-vkp3iTF6QmHMvL+34DI93IiMPjS2lqcMlA1fl7nXVsQ=",
-        "owner": "oxalica",
-        "repo": "rust-overlay",
-        "rev": "085bdbf5dde5477538e4c87d1684b6c6df56c0ad",
-        "type": "github"
-      },
-      "original": {
-        "owner": "oxalica",
-        "repo": "rust-overlay",
-        "type": "github"
-      }
-    },
-    "rust-overlay_2": {
-      "inputs": {
-        "nixpkgs": [
-          "purse-first",
-          "rust",
-          "nixpkgs-master"
-        ]
-      },
-      "locked": {
-        "lastModified": 1771816254,
-        "narHash": "sha256-vkp3iTF6QmHMvL+34DI93IiMPjS2lqcMlA1fl7nXVsQ=",
-        "owner": "oxalica",
-        "repo": "rust-overlay",
-        "rev": "085bdbf5dde5477538e4c87d1684b6c6df56c0ad",
-        "type": "github"
-      },
-      "original": {
-        "owner": "oxalica",
-        "repo": "rust-overlay",
-        "type": "github"
-      }
-    },
-    "rust-overlay_3": {
       "inputs": {
         "nixpkgs": [
           "purse-first",
@@ -590,33 +430,6 @@
         "repo": "sandcastle",
         "type": "github"
       }
-    },
-    "shell": {
-      "inputs": {
-        "nixpkgs": [
-          "purse-first",
-          "nixpkgs"
-        ],
-        "nixpkgs-master": [
-          "purse-first",
-          "nixpkgs-master"
-        ],
-        "utils": [
-          "purse-first",
-          "utils"
-        ]
-      },
-      "locked": {
-        "path": "./devenvs/shell",
-        "type": "path"
-      },
-      "original": {
-        "path": "./devenvs/shell",
-        "type": "path"
-      },
-      "parent": [
-        "purse-first"
-      ]
     },
     "systems": {
       "locked": {

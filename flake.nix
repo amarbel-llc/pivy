@@ -15,12 +15,6 @@
       inputs.nixpkgs-master.follows = "nixpkgs-master";
       inputs.utils.follows = "utils";
     };
-    devenv-rust = {
-      url = "github:amarbel-llc/purse-first?dir=devenvs/rust";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.nixpkgs-master.follows = "nixpkgs-master";
-      inputs.utils.follows = "utils";
-    };
   };
 
   outputs =
@@ -31,7 +25,6 @@
       utils,
       purse-first,
       sandcastle,
-      devenv-rust,
     }:
     (utils.lib.eachDefaultSystem (
       system:
@@ -314,8 +307,15 @@
             cat > $out/libexec/pivy/pivy-notify <<NOTIFY
             #!/bin/sh
             case "\$(uname)" in
-              Darwin) exec ${if pkgs.stdenv.isDarwin then "${pkgs.terminal-notifier}/bin/terminal-notifier" else "terminal-notifier"} -title "\$1" -message "\$2" ;;
-              *)      exec ${if pkgs.stdenv.isLinux then "${pkgs.libnotify}/bin/notify-send" else "notify-send"} "\$1" "\$2" ;;
+              Darwin) exec ${
+                if pkgs.stdenv.isDarwin then
+                  "${pkgs.terminal-notifier}/bin/terminal-notifier"
+                else
+                  "terminal-notifier"
+              } -title "\$1" -message "\$2" ;;
+              *)      exec ${
+                if pkgs.stdenv.isLinux then "${pkgs.libnotify}/bin/notify-send" else "notify-send"
+              } "\$1" "\$2" ;;
             esac
             NOTIFY
             chmod +x $out/libexec/pivy/pivy-notify
@@ -339,17 +339,21 @@
         packages.openssh = openssh;
 
         devShells.default = pkgs.mkShell {
-          packages = buildInputs ++ nativeBuildInputs ++ (with pkgs; [
-            just
-            gum
-          ]) ++ [
-            purse-first.packages.${system}.batman
-            sandcastle.packages.${system}.default
-          ];
+          packages =
+            buildInputs
+            ++ nativeBuildInputs
+            ++ (with pkgs; [
+              just
+              gum
+            ])
+            ++ [
+              purse-first.packages.${system}.batman
+              sandcastle.packages.${system}.default
+            ];
         };
 
         devShells.rust = pkgs.mkShell {
-          inputsFrom = [ devenv-rust.devShells.${system}.default ];
+          inputsFrom = [ purse-first.devShells.${system}.rust ];
           packages = [
             pkgs.openssl.dev
           ]
