@@ -16,7 +16,7 @@
       inputs.utils.follows = "utils";
     };
     devenv-rust = {
-      url = "github:friedenberg/eng?dir=devenvs/rust";
+      url = "github:amarbel-llc/purse-first?dir=devenvs/rust";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.nixpkgs-master.follows = "nixpkgs-master";
       inputs.utils.follows = "utils";
