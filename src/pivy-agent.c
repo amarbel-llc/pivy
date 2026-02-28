@@ -213,6 +213,8 @@ static size_t pin_len = 0;
 
 static struct sshkey *cak = NULL;
 
+static int card_find_retries = 0;
+
 static struct bunyan_frame *msg_log_frame;
 
 /* Maximum accepted message length */
@@ -580,12 +582,28 @@ findagain:
 		selk = ks;
 
 		if (selk == NULL) {
+			if (card_find_retries == 0 &&
+			    monotime() - last_update < 30000) {
+				/*
+				 * Card was recently known but not found now.
+				 * PCSC may not have detected reinsertion yet.
+				 * Wait briefly and retry once.
+				 */
+				card_find_retries = 1;
+				bunyan_log(BNY_DEBUG,
+				    "card not found, retrying after delay",
+				    NULL);
+				usleep(500000); /* 500ms */
+				goto findagain;
+			}
+			card_find_retries = 0;
 			err = errf("NotFoundError", NULL, "PIV card with "
 			    "given GUID is not present on the system");
 			if (monotime() - last_update > 5000)
 				drop_pin();
 			return (err);
 		}
+		card_find_retries = 0;
 
 		if ((err = piv_txn_begin(selk))) {
 			return (err);
@@ -2319,6 +2337,48 @@ process_ext_query(socket_entry_t *e, struct sshbuf *buf)
 	return (NULL);
 }
 
+static errf_t *
+process_ext_pin_status(socket_entry_t *e, struct sshbuf *buf)
+{
+	int r;
+	struct sshbuf *msg;
+
+	if ((msg = sshbuf_new()) == NULL)
+		fatal("%s: sshbuf_new failed", __func__);
+
+	/*
+	 * Return whether a PIN is currently cached and whether the card
+	 * is present.
+	 * Response: SSH_AGENT_SUCCESS + u8(has_pin) + u8(has_card)
+	 */
+	if ((r = sshbuf_put_u8(msg, SSH_AGENT_SUCCESS)) != 0)
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+	if ((r = sshbuf_put_u8(msg, pin_len > 0 ? 1 : 0)) != 0)
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+
+	{
+		errf_t *err;
+		uint8_t card_present = 0;
+		if (selk != NULL) {
+			err = piv_txn_begin(selk);
+			if (err == ERRF_OK) {
+				card_present = 1;
+				piv_txn_end(selk);
+			} else {
+				errf_free(err);
+			}
+		}
+		if ((r = sshbuf_put_u8(msg, card_present)) != 0)
+			fatal("%s: buffer error: %s", __func__, ssh_err(r));
+	}
+
+	if ((r = sshbuf_put_stringb(e->se_output, msg)) != 0)
+		fatal("%s: buffer error: %s", __func__, ssh_err(r));
+
+	sshbuf_free(msg);
+	return (ERRF_OK);
+}
+
 struct exthandler exthandlers[] = {
 { "query", 				B_FALSE,	process_ext_query },
 { "ecdh@joyent.com", 			B_TRUE,		process_ext_ecdh },
@@ -2327,6 +2387,7 @@ struct exthandler exthandlers[] = {
 { "ykpiv-attest@joyent.com", 		B_TRUE,		process_ext_attest },
 { "session-bind@openssh.com", 		B_FALSE,	process_ext_sessbind },
 { "sign-prehash@arekinath.github.io",	B_FALSE,	process_ext_prehash },
+{ "pin-status@joyent.com",		B_FALSE,	process_ext_pin_status },
 { NULL, B_FALSE, NULL }
 };
 
