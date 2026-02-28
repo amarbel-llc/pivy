@@ -8,11 +8,11 @@ setup() {
   if [[ -n "${PIVY_AGENT_RUST:-}" ]]; then
     PIVY_AGENT="$PIVY_AGENT_RUST"
   else
-    PIVY_AGENT="$(dirname "$BATS_TEST_FILE")/../result-rust/bin/pivy-agent"
+    PIVY_AGENT="$(dirname "$BATS_TEST_FILE")/../result/bin/pivy-agent-rust"
   fi
 
   if [[ ! -x "$PIVY_AGENT" ]]; then
-    skip "pivy-agent-rust not found at $PIVY_AGENT (run: nix build .#pivy-rust -o result-rust)"
+    skip "pivy-agent-rust not found at $PIVY_AGENT (run: nix build .#pivy-rust)"
   fi
 }
 

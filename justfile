@@ -5,7 +5,7 @@ test-bats: build
   PATH="$(readlink -f ./result)/bin:$PATH" just zz-tests_bats/test
 
 test-bats-rust: build-nix-rust
-  PIVY_AGENT_RUST="$(readlink -f ./result-rust)/bin/pivy-agent" just zz-tests_bats/test-rust
+  PIVY_AGENT_RUST="$(readlink -f ./result)/bin/pivy-agent-rust" just zz-tests_bats/test-rust
 
 test: test-bats test-bats-rust
 
@@ -16,7 +16,7 @@ build-rust-release:
   cd rust && cargo build --release
 
 build-nix-rust:
-  nix build .#pivy-rust -o result-rust
+  nix build .#pivy-rust
 
 test-rust:
   cd rust && cargo test

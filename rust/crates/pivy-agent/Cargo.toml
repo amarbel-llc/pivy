@@ -3,6 +3,10 @@ name = "pivy-agent"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "pivy-agent-rust"
+path = "src/main.rs"
+
 [dependencies]
 pivy-common = { path = "../pivy-common" }
 pivy-piv = { path = "../pivy-piv" }
