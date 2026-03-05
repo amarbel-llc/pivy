@@ -2,11 +2,12 @@
 
 setup() {
   load "$(dirname "$BATS_TEST_FILE")/common.bash"
+  setup_test_home
   export output
 }
 
 teardown() {
-  chflags_and_rm
+  teardown_test_home
 }
 
 stub_service_commands() {
@@ -23,15 +24,13 @@ stub_service_commands() {
 }
 
 install_service_setup() {
-  local home="$BATS_TEST_TMPDIR/home"
   if [[ "$(uname)" == "Darwin" ]]; then
-    mkdir -p "$home/Library"
-    SERVICE_FILE="$home/Library/LaunchAgents/net.cooperi.pivy-agent.plist"
+    mkdir -p "$HOME/Library"
+    SERVICE_FILE="$HOME/Library/LaunchAgents/net.cooperi.pivy-agent.plist"
   else
-    mkdir -p "$home/.config"
-    SERVICE_FILE="$home/.config/systemd/user/pivy-agent@.service"
+    mkdir -p "$HOME/.config"
+    SERVICE_FILE="$HOME/.config/systemd/user/pivy-agent@.service"
   fi
-  INSTALL_HOME="$home"
   stub_service_commands
 }
 
@@ -65,7 +64,7 @@ function install_service_writes_service_file_with_socket_path { # @test
   install_service_setup
 
   # service management commands fail in test sandbox, but files should be written
-  HOME="$INSTALL_HOME" run pivy-agent install-service -A -a /tmp/first.sock
+  run pivy-agent install-service -A -a /tmp/first.sock
   assert [ -f "$SERVICE_FILE" ]
   run grep '/tmp/first.sock' "$SERVICE_FILE"
   assert_success
@@ -74,10 +73,10 @@ function install_service_writes_service_file_with_socket_path { # @test
 function install_service_reinstall_updates_socket_path { # @test
   install_service_setup
 
-  HOME="$INSTALL_HOME" run pivy-agent install-service -A -a /tmp/first.sock
+  run pivy-agent install-service -A -a /tmp/first.sock
   assert [ -f "$SERVICE_FILE" ]
 
-  HOME="$INSTALL_HOME" run pivy-agent install-service -A -a /tmp/second.sock
+  run pivy-agent install-service -A -a /tmp/second.sock
   run grep '/tmp/second.sock' "$SERVICE_FILE"
   assert_success
   run grep '/tmp/first.sock' "$SERVICE_FILE"
@@ -87,7 +86,7 @@ function install_service_reinstall_updates_socket_path { # @test
 function install_service_contains_askpass_env { # @test
   install_service_setup
 
-  HOME="$INSTALL_HOME" run pivy-agent install-service -A -a /tmp/test.sock
+  run pivy-agent install-service -A -a /tmp/test.sock
   assert [ -f "$SERVICE_FILE" ]
   run grep 'SSH_ASKPASS' "$SERVICE_FILE"
   assert_success
@@ -100,7 +99,7 @@ function install_service_contains_askpass_env { # @test
 function install_service_contains_notify_env { # @test
   install_service_setup
 
-  HOME="$INSTALL_HOME" run pivy-agent install-service -A -a /tmp/test.sock
+  run pivy-agent install-service -A -a /tmp/test.sock
   assert [ -f "$SERVICE_FILE" ]
   run grep 'SSH_NOTIFY_SEND' "$SERVICE_FILE"
   assert_success
@@ -109,7 +108,7 @@ function install_service_contains_notify_env { # @test
 function install_service_contains_confirm_env { # @test
   install_service_setup
 
-  HOME="$INSTALL_HOME" run pivy-agent install-service -A -a /tmp/test.sock
+  run pivy-agent install-service -A -a /tmp/test.sock
   assert [ -f "$SERVICE_FILE" ]
   run grep 'SSH_CONFIRM' "$SERVICE_FILE"
   assert_success
@@ -118,7 +117,7 @@ function install_service_contains_confirm_env { # @test
 function install_service_no_askpass_omits_askpass_env { # @test
   install_service_setup
 
-  HOME="$INSTALL_HOME" run pivy-agent install-service -A -a /tmp/test.sock --no-askpass
+  run pivy-agent install-service -A -a /tmp/test.sock --no-askpass
   assert [ -f "$SERVICE_FILE" ]
   run grep 'SSH_ASKPASS' "$SERVICE_FILE"
   assert_failure
@@ -127,7 +126,7 @@ function install_service_no_askpass_omits_askpass_env { # @test
 function install_service_no_notify_omits_notify_env { # @test
   install_service_setup
 
-  HOME="$INSTALL_HOME" run pivy-agent install-service -A -a /tmp/test.sock --no-notify
+  run pivy-agent install-service -A -a /tmp/test.sock --no-notify
   assert [ -f "$SERVICE_FILE" ]
   run grep 'SSH_NOTIFY_SEND' "$SERVICE_FILE"
   assert_failure
@@ -146,7 +145,7 @@ function restart_service_fails_without_service_installed { # @test
 
 function uninstall_service_recognized_as_subcommand { # @test
   stub_service_commands
-  HOME="$BATS_TEST_TMPDIR" run pivy-agent uninstall-service
+  run pivy-agent uninstall-service
   assert_success
   assert_output --partial "Uninstalled"
 }
