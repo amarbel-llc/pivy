@@ -1,16 +1,10 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/3e20095fe3c6cbb1ddcef89b26969a69a1570776";
-    nixpkgs-master.url = "github:NixOS/nixpkgs/e034e386767a6d00b65ac951821835bd977a08f7";
+    nixpkgs.url = "github:NixOS/nixpkgs/8110df5ad7abf5d4c0f6fb0f8f978390e77f9685";
+    nixpkgs-master.url = "github:NixOS/nixpkgs/8110df5ad7abf5d4c0f6fb0f8f978390e77f9685";
     utils.url = "https://flakehub.com/f/numtide/flake-utils/0.1.102";
-    purse-first = {
-      url = "github:amarbel-llc/purse-first";
-      inputs.nixpkgs.follows = "nixpkgs";
-      inputs.nixpkgs-master.follows = "nixpkgs-master";
-      inputs.utils.follows = "utils";
-    };
-    sandcastle = {
-      url = "github:amarbel-llc/sandcastle";
+    bob = {
+      url = "github:amarbel-llc/bob";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.nixpkgs-master.follows = "nixpkgs-master";
       inputs.utils.follows = "utils";
@@ -23,8 +17,7 @@
       nixpkgs,
       nixpkgs-master,
       utils,
-      purse-first,
-      sandcastle,
+      bob,
     }:
     (utils.lib.eachDefaultSystem (
       system:
@@ -347,13 +340,12 @@
               gum
             ])
             ++ [
-              purse-first.packages.${system}.batman
-              sandcastle.packages.${system}.default
+              bob.packages.${system}.batman
+              bob.packages.${system}.sandcastle
             ];
         };
 
         devShells.rust = pkgs.mkShell {
-          inputsFrom = [ purse-first.devShells.${system}.rust ];
           packages = [
             pkgs.openssl.dev
           ]
