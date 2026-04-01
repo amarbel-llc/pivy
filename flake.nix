@@ -1,7 +1,7 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/8110df5ad7abf5d4c0f6fb0f8f978390e77f9685";
-    nixpkgs-master.url = "github:NixOS/nixpkgs/8110df5ad7abf5d4c0f6fb0f8f978390e77f9685";
+    nixpkgs.url = "github:NixOS/nixpkgs/4590696c8693fea477850fe379a01544293ca4e2";
+    nixpkgs-master.url = "github:NixOS/nixpkgs/e2dde111aea2c0699531dc616112a96cd55ab8b5";
     utils.url = "https://flakehub.com/f/numtide/flake-utils/0.1.102";
     bob = {
       url = "github:amarbel-llc/bob";
@@ -342,11 +342,17 @@
             ++ [
               bob.packages.${system}.batman
               bob.packages.${system}.sandcastle
+              bob.packages.${system}.tap-dancer
             ];
         };
 
         devShells.rust = pkgs.mkShell {
           packages = [
+            pkgs.rustc
+            pkgs.cargo
+            pkgs.rustfmt
+            pkgs.clippy
+            pkgs.pkg-config
             pkgs.openssl.dev
           ]
           ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
