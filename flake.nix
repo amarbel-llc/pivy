@@ -169,6 +169,7 @@
           gnutar
           patch
           makeWrapper
+          asciidoctor
         ];
 
         pivy-rust = pkgs.rustPlatform.buildRustPackage {
@@ -201,6 +202,13 @@
             platforms = platforms.linux ++ platforms.darwin;
           };
         };
+
+        # Extract YYYY-MM-DD from the flake's lastModifiedDate (YYYYMMDDHHmmSS)
+        revdate =
+          let
+            d = self.lastModifiedDate;
+          in
+          "${builtins.substring 0 4 d}-${builtins.substring 4 2 d}-${builtins.substring 6 2 d}";
 
         pivy = pkgs.stdenv.mkDerivation {
           pname = "pivy";
@@ -276,6 +284,16 @@
             WRAPPER
               chmod +x $out/bin/$cmd
             done
+            # Build and install manpages
+            mkdir -p $out/share/man/man1
+            for adoc in man/*.1.adoc; do
+              asciidoctor -b manpage \
+                -a pivy-version=${pivy.version} \
+                -a revdate=${revdate} \
+                -D $out/share/man/man1 \
+                "$adoc"
+            done
+
             # Install service files
             ${pkgs.lib.optionalString pkgs.stdenv.isLinux ''
               mkdir -p $out/lib/systemd/user
