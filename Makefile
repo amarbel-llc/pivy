@@ -323,7 +323,8 @@ _PIV_COMMON_SOURCES=		\
 	errf.c			\
 	utils.c			\
 	strbuf.c		\
-	slot-spec.c
+	slot-spec.c		\
+	xdg.c
 PIV_COMMON_SOURCES=$(_PIV_COMMON_SOURCES:%=src/%)
 _PIV_COMMON_HEADERS=		\
 	piv.h			\
@@ -333,7 +334,8 @@ _PIV_COMMON_HEADERS=		\
 	piv-internal.h		\
 	debug.h			\
 	utils.h			\
-	slot-spec.h
+	slot-spec.h		\
+	xdg.h
 PIV_COMMON_HEADERS=$(_PIV_COMMON_HEADERS:%=src/%)
 
 ifneq ($(SYSTEM), OpenBSD)
