@@ -149,3 +149,71 @@ function uninstall_service_recognized_as_subcommand { # @test
   assert_success
   assert_output --partial "Uninstalled"
 }
+
+# --- XDG path behavior ---
+
+function install_service_uses_xdg_config_home_when_set { # @test
+  local xdg_dir="$BATS_TEST_TMPDIR/xdg-config"
+  export XDG_CONFIG_HOME="$xdg_dir"
+  stub_service_commands
+
+  if [[ "$(uname)" == "Darwin" ]]; then
+    mkdir -p "$HOME/Library"
+    run pivy-agent install-service -A -a /tmp/xdg-test.sock
+    # macOS plist stays in ~/Library/LaunchAgents regardless of XDG
+    assert [ -f "$HOME/Library/LaunchAgents/net.cooperi.pivy-agent.plist" ]
+  else
+    run pivy-agent install-service -A -a /tmp/xdg-test.sock
+    assert [ -f "$xdg_dir/systemd/user/pivy-agent@.service" ]
+    assert [ -f "$xdg_dir/pivy-agent/default" ]
+    # Legacy path should NOT be created
+    assert [ ! -f "$HOME/.config/systemd/user/pivy-agent@.service" ]
+  fi
+}
+
+function install_service_xdg_log_home_used_on_macos { # @test
+  if [[ "$(uname)" != "Darwin" ]]; then
+    skip "macOS-only test"
+  fi
+
+  local log_dir="$BATS_TEST_TMPDIR/xdg-log"
+  export XDG_LOG_HOME="$log_dir"
+  mkdir -p "$HOME/Library"
+  stub_service_commands
+
+  run pivy-agent install-service -A -a /tmp/log-test.sock
+  local plist="$HOME/Library/LaunchAgents/net.cooperi.pivy-agent.plist"
+  assert [ -f "$plist" ]
+  run grep "$log_dir/pivy/pivy-agent.log" "$plist"
+  assert_success
+  assert [ -d "$log_dir/pivy" ]
+}
+
+function uninstall_service_removes_xdg_and_legacy_paths { # @test
+  if [[ "$(uname)" == "Darwin" ]]; then
+    skip "Linux-only test"
+  fi
+
+  local xdg_dir="$BATS_TEST_TMPDIR/xdg-config"
+  export XDG_CONFIG_HOME="$xdg_dir"
+  stub_service_commands
+
+  # Install to XDG path
+  run pivy-agent install-service -A -a /tmp/test.sock
+  assert [ -f "$xdg_dir/systemd/user/pivy-agent@.service" ]
+  assert [ -f "$xdg_dir/pivy-agent/default" ]
+
+  # Also create legacy files to simulate migration scenario
+  mkdir -p "$HOME/.config/systemd/user"
+  mkdir -p "$HOME/.config/pivy-agent"
+  touch "$HOME/.config/systemd/user/pivy-agent@.service"
+  touch "$HOME/.config/pivy-agent/default"
+
+  run pivy-agent uninstall-service
+  assert_success
+  # Both XDG and legacy should be removed
+  assert [ ! -f "$xdg_dir/systemd/user/pivy-agent@.service" ]
+  assert [ ! -f "$xdg_dir/pivy-agent/default" ]
+  assert [ ! -f "$HOME/.config/systemd/user/pivy-agent@.service" ]
+  assert [ ! -f "$HOME/.config/pivy-agent/default" ]
+}
