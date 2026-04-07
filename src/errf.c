@@ -7,14 +7,11 @@
  * Author: Alex Wilson <alex.wilson@joyent.com>
  */
 
-#include <stdlib.h>
-#if defined(__linux__)
-#include <bsd/stdlib.h>
-#endif
 #include <errno.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "errf.h"
