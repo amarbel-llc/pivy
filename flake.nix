@@ -250,10 +250,8 @@
               LIBRESSL_INC=${libressl}/include \
               LIBRESSL_LIB=${libressl}/lib \
               ZLIB_LIB=${pkgs.zlib}/lib \
-              SYSTEM_CFLAGS="${pkgs.lib.optionalString pkgs.stdenv.isDarwin "-arch ${pkgs.stdenv.hostPlatform.darwinArch}"} -DPIVY_ASKPASS_DEFAULT='\"$out/libexec/pivy/pivy-askpass\"'" \
-              ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
-                SYSTEM_LDFLAGS="-arch ${pkgs.stdenv.hostPlatform.darwinArch}"
-              ''}
+              SYSTEM_CFLAGS="${pkgs.lib.optionalString pkgs.stdenv.isDarwin "-arch ${pkgs.stdenv.hostPlatform.darwinArch}"}${pkgs.lib.optionalString pkgs.stdenv.isLinux "$(pkg-config --cflags libbsd-overlay)"} -DPIVY_ASKPASS_DEFAULT='\"$out/libexec/pivy/pivy-askpass\"'" \
+              SYSTEM_LDFLAGS="${pkgs.lib.optionalString pkgs.stdenv.isDarwin "-arch ${pkgs.stdenv.hostPlatform.darwinArch}"}${pkgs.lib.optionalString pkgs.stdenv.isLinux "$(pkg-config --libs libbsd-overlay)"}"
             runHook postBuild
           '';
 

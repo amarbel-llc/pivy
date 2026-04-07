@@ -91,6 +91,9 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#if defined(__linux__)
+#include <bsd/stdlib.h>
+#endif
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
