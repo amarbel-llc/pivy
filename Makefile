@@ -740,6 +740,32 @@ clean:
 	rm -fr .dist
 	rm -fr macosx/root macosx/*.pkg
 
+_COMPDB_CFLAGS =	$(PCSC_CFLAGS) \
+			$(CRYPTO_CFLAGS) \
+			$(ZLIB_CFLAGS) \
+			$(SYSTEM_CFLAGS) \
+			$(SECURITY_CFLAGS) \
+			-O2 -g -D_GNU_SOURCE \
+			-I.
+_COMPDB_SOURCES = $(wildcard src/*.c)
+compile-commands:
+	@echo '[' > compile_commands.json.tmp
+	@first=1; \
+	for src in $(_COMPDB_SOURCES); do \
+		if [ $$first -eq 0 ]; then printf ',\n' >> compile_commands.json.tmp; fi; \
+		first=0; \
+		printf '  {"directory": "%s", "file": "%s", "command": "%s %s -c %s"}' \
+			"$(CURDIR)" \
+			"$$src" \
+			"$(CC)" \
+			"$(_COMPDB_CFLAGS)" \
+			"$$src" \
+			>> compile_commands.json.tmp; \
+	done
+	@printf '\n]\n' >> compile_commands.json.tmp
+	@mv compile_commands.json.tmp compile_commands.json
+	@echo "wrote compile_commands.json ($$(jq length compile_commands.json) entries)"
+
 distclean: clean
 	rm -fr libressl .libressl.extract .libressl.patch .libressl.configure
 	rm -fr openssh .openssh.extract .openssh.patch .openssh.configure

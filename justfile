@@ -37,5 +37,8 @@ clippy:
 check:
   cd rust && cargo check
 
+compile-commands:
+  nix develop -c make compile-commands
+
 clean:
   cd rust && cargo clean
