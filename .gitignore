@@ -26,3 +26,5 @@
 illumos/*.xml
 illumos/fs-pivy
 illumos/svc-pivy-agent
+/result
+/result-rust
