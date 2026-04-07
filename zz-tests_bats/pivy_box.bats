@@ -25,3 +25,41 @@ function bad_type_and_op_fails { # @test
   run pivy-box nonexistent badop
   assert_failure
 }
+
+# --- SSH_ASKPASS support (issue #8) ---
+
+resolve_unwrapped() {
+  local cmd="$1"
+  local bin_path
+  bin_path="$(command -v "$cmd")"
+  # Follow symlinks to the nix store wrapper
+  bin_path="$(readlink -f "$bin_path")"
+  # Extract the unwrapped binary path from the wrapper script
+  local unwrapped
+  unwrapped="$(grep -o '/nix/store/[^ ]*\.'"$cmd"'-unwrapped' "$bin_path")" ||
+    unwrapped=""
+  if [[ -n $unwrapped && -x $unwrapped ]]; then
+    echo "$unwrapped"
+  else
+    # Not a wrapper script — binary is the command itself
+    echo "$bin_path"
+  fi
+}
+
+function pivy_box_binary_references_ssh_askpass { # @test
+  local binary
+  binary="$(resolve_unwrapped pivy-box)"
+
+  run strings "$binary"
+  assert_success
+  assert_output --partial 'SSH_ASKPASS'
+}
+
+function pivy_agent_binary_references_ssh_askpass { # @test
+  local binary
+  binary="$(resolve_unwrapped pivy-agent)"
+
+  run strings "$binary"
+  assert_success
+  assert_output --partial 'SSH_ASKPASS'
+}

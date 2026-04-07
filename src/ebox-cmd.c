@@ -148,6 +148,76 @@ const char *pin_type_to_name(enum piv_pin type) {
   }
 }
 
+static const char *resolve_askpass(void) {
+  const char *ap = getenv("SSH_ASKPASS");
+  if (ap != NULL)
+    return (ap);
+#if defined(PIVY_ASKPASS_DEFAULT)
+  return (PIVY_ASKPASS_DEFAULT);
+#else
+  return (NULL);
+#endif
+}
+
+static char *run_askpass(const char *prompt_str) {
+  const char *ap = resolve_askpass();
+  if (ap == NULL)
+    return (NULL);
+
+  int p[2];
+  if (pipe(p) == -1)
+    return (NULL);
+
+  pid_t kid = fork();
+  if (kid == -1) {
+    close(p[0]);
+    close(p[1]);
+    return (NULL);
+  }
+  if (kid == 0) {
+    close(p[0]);
+    if (dup2(p[1], STDOUT_FILENO) == -1)
+      _exit(1);
+    close(p[1]);
+    execlp(ap, ap, prompt_str, (char *)NULL);
+    _exit(1);
+  }
+  close(p[1]);
+
+  char buf[1024];
+  size_t len = 0;
+  do {
+    ssize_t r = read(p[0], buf + len, sizeof(buf) - 1 - len);
+    if (r == -1 && errno == EINTR)
+      continue;
+    if (r <= 0)
+      break;
+    len += r;
+  } while (sizeof(buf) - 1 - len > 0);
+  buf[len] = '\0';
+  close(p[0]);
+
+  int status;
+  pid_t ret;
+  while ((ret = waitpid(kid, &status, 0)) == -1)
+    if (errno != EINTR)
+      break;
+  if (ret == -1 || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+    explicit_bzero(buf, sizeof(buf));
+    return (NULL);
+  }
+
+  buf[strcspn(buf, "\r\n")] = '\0';
+  if (strlen(buf) < 1) {
+    explicit_bzero(buf, sizeof(buf));
+    return (NULL);
+  }
+
+  char *result = strdup(buf);
+  explicit_bzero(buf, sizeof(buf));
+  return (result);
+}
+
 void assert_pin(struct piv_token *pk, struct piv_slot *slot,
                 const char *partname, boolean_t prompt) {
   errf_t *er;
@@ -174,19 +244,46 @@ again:
     char prompt[64];
     char pinbuf[16];
     char *guid = piv_token_shortid(pk);
+    const char *askpass_require = getenv("SSH_ASKPASS_REQUIRE");
+    boolean_t force_askpass =
+        (askpass_require != NULL && strcmp(askpass_require, "force") == 0);
     snprintf(prompt, 64, fmt, pin_type_to_name(auth), guid, partname);
-    do {
-      ebox_pin = readpassphrase(prompt, pinbuf, sizeof(pinbuf), RPP_ECHO_OFF);
-    } while (ebox_pin == NULL && errno == EINTR);
-    if ((ebox_pin == NULL && errno == ENOTTY) || strlen(ebox_pin) < 1) {
+
+    if (!force_askpass) {
+      do {
+        ebox_pin = readpassphrase(prompt, pinbuf, sizeof(pinbuf), RPP_ECHO_OFF);
+      } while (ebox_pin == NULL && errno == EINTR);
+    }
+
+    if (force_askpass || (ebox_pin == NULL && errno == ENOTTY) ||
+        (ebox_pin != NULL && strlen(ebox_pin) < 1)) {
+      ebox_pin = run_askpass(prompt);
+      if (ebox_pin != NULL) {
+        /*
+         * run_askpass returns a strdup'd string; copy into pinbuf
+         * so the strdup below works uniformly.
+         */
+        strlcpy(pinbuf, ebox_pin, sizeof(pinbuf));
+        free(ebox_pin);
+        ebox_pin = pinbuf;
+      }
+    }
+
+    if (ebox_pin == NULL) {
+      piv_txn_end(pk);
+      if (errno == ENOTTY) {
+        errx(EXIT_PIN,
+             "a PIN is required to unlock "
+             "token %s",
+             guid);
+      }
+      err(EXIT_PIN, "failed to read PIN");
+    } else if (strlen(ebox_pin) < 1) {
       piv_txn_end(pk);
       errx(EXIT_PIN,
            "a PIN is required to unlock "
            "token %s",
            guid);
-    } else if (ebox_pin == NULL) {
-      piv_txn_end(pk);
-      err(EXIT_PIN, "failed to read PIN");
     } else if (strlen(ebox_pin) < 4 || strlen(ebox_pin) > 8) {
       const char *charType = "digits";
       if (piv_token_is_ykpiv(pk))

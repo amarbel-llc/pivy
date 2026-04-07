@@ -250,8 +250,8 @@
               LIBRESSL_INC=${libressl}/include \
               LIBRESSL_LIB=${libressl}/lib \
               ZLIB_LIB=${pkgs.zlib}/lib \
+              SYSTEM_CFLAGS="${pkgs.lib.optionalString pkgs.stdenv.isDarwin "-arch ${pkgs.stdenv.hostPlatform.darwinArch}"} -DPIVY_ASKPASS_DEFAULT='\"$out/libexec/pivy/pivy-askpass\"'" \
               ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
-                SYSTEM_CFLAGS="-arch ${pkgs.stdenv.hostPlatform.darwinArch}" \
                 SYSTEM_LDFLAGS="-arch ${pkgs.stdenv.hostPlatform.darwinArch}"
               ''}
             runHook postBuild
