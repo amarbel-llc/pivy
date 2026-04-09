@@ -1719,6 +1719,7 @@ pin_again:
              partner, NULL);
 
   if ((r = sshbuf_put_u8(msg, SSH2_AGENT_EXT_RESPONSE)) != 0 ||
+      (r = sshbuf_put_cstring(msg, "ecdh@joyent.com")) != 0 ||
       (r = sshbuf_put_string(msg, secret, seclen)) != 0)
     fatal("%s: buffer error: %s", __func__, ssh_err(r));
   explicit_bzero(secret, seclen);
@@ -1867,6 +1868,7 @@ pin_again:
   VERIFY0(piv_box_to_binary(newbox, &out, &outlen));
 
   if ((r = sshbuf_put_u8(msg, SSH2_AGENT_EXT_RESPONSE)) != 0 ||
+      (r = sshbuf_put_cstring(msg, "ecdh-rebox@joyent.com")) != 0 ||
       (r = sshbuf_put_string(msg, out, outlen)) != 0)
     fatal("%s: buffer error: %s", __func__, ssh_err(r));
 

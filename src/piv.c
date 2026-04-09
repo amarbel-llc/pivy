@@ -7085,6 +7085,22 @@ errf_t *piv_box_open_agent(int fd, struct piv_ecdh_box *box) {
                  (int)code);
       goto out;
     }
+    if (code == SSH2_AGENT_EXT_RESPONSE) {
+      char *echo = NULL;
+      if ((rc = sshbuf_get_cstring(reply, &echo, NULL))) {
+        err = ssherrf("sshbuf_get_cstring", rc);
+        goto out;
+      }
+      if (strcmp(echo, "ecdh-rebox@joyent.com") != 0) {
+        err = errf("InvalidFormatError", NULL,
+                   "ecdh-rebox extension response did not echo "
+                   "'ecdh-rebox@joyent.com' (got '%s')",
+                   echo);
+        free(echo);
+        goto out;
+      }
+      free(echo);
+    }
     sshbuf_reset(boxbuf);
     if ((rc = sshbuf_get_stringb(reply, boxbuf))) {
       err = ssherrf("sshbuf_get_stringb", rc);
@@ -7159,6 +7175,22 @@ errf_t *piv_box_open_agent(int fd, struct piv_ecdh_box *box) {
                  "message code %d to ECDH request",
                  (int)code);
       goto out;
+    }
+    if (code == SSH2_AGENT_EXT_RESPONSE) {
+      char *echo = NULL;
+      if ((rc = sshbuf_get_cstring(reply, &echo, NULL))) {
+        err = ssherrf("sshbuf_get_cstring", rc);
+        goto out;
+      }
+      if (strcmp(echo, "ecdh@joyent.com") != 0) {
+        err = errf("InvalidFormatError", NULL,
+                   "ecdh extension response did not echo "
+                   "'ecdh@joyent.com' (got '%s')",
+                   echo);
+        free(echo);
+        goto out;
+      }
+      free(echo);
     }
     if ((rc = sshbuf_get_string(reply, &sec, &seclen))) {
       err = ssherrf("sshbuf_get_string", rc);
