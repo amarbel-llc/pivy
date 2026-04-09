@@ -388,7 +388,6 @@ The agent records the forwarding state but does not verify `signature`.
 
 ```
 u8       SSH_AGENT_SUCCESS (6)
-u32      2
 ```
 
 #### Behavior

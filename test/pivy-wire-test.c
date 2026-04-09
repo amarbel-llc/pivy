@@ -349,8 +349,8 @@ static void test_pin_status(void) {
 }
 
 /*
- * Test: session-bind response (no-data, uses SSH_AGENT_SUCCESS).
- * Wire format: u8(6) + u32(2)
+ * Test: session-bind response (no-data, uses bare SSH_AGENT_SUCCESS).
+ * Wire format: u8(6)
  */
 static void test_session_bind(void) {
   struct sshbuf *msg;
@@ -364,8 +364,7 @@ static void test_session_bind(void) {
   }
 
   /* Construct response (same as process_ext_sessbind) */
-  if ((rc = sshbuf_put_u8(msg, SSH_AGENT_SUCCESS_VAL)) != 0 ||
-      (rc = sshbuf_put_u32(msg, 2)) != 0) {
+  if ((rc = sshbuf_put_u8(msg, SSH_AGENT_SUCCESS_VAL)) != 0) {
     fail(name, "construction failed");
     sshbuf_free(msg);
     return;
@@ -377,21 +376,13 @@ static void test_session_bind(void) {
     return;
   }
 
-  /* Validate u32 payload */
-  uint32_t val;
-  if ((rc = sshbuf_get_u32(msg, &val)) != 0 || val != 2) {
-    fail(name, "u32 payload mismatch");
-    sshbuf_free(msg);
-    return;
-  }
-
   if (sshbuf_len(msg) != 0) {
-    fail(name, "trailing data");
+    fail(name, "trailing data after bare SSH_AGENT_SUCCESS");
     sshbuf_free(msg);
     return;
   }
 
-  pass(name, "type=6 (no echo), u32(2)");
+  pass(name, "type=6 (bare, no echo, no payload)");
   sshbuf_free(msg);
 }
 

@@ -2095,8 +2095,7 @@ static errf_t *process_ext_sessbind(socket_entry_t *e, struct sshbuf *buf) {
                NULL);
   }
 
-  if ((r = sshbuf_put_u8(msg, SSH_AGENT_SUCCESS)) != 0 ||
-      (r = sshbuf_put_u32(msg, 2)) != 0)
+  if ((r = sshbuf_put_u8(msg, SSH_AGENT_SUCCESS)) != 0)
     fatal("%s: buffer error: %s", __func__, ssh_err(r));
 
   if ((r = sshbuf_put_stringb(e->se_output, msg)) != 0)
