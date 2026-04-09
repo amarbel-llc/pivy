@@ -388,7 +388,12 @@ The agent records the forwarding state but does not verify `signature`.
 
 ```
 u8       SSH_AGENT_SUCCESS (6)
+u32      2
 ```
+
+Note: The `u32(2)` payload is required by `ssh-agent-mux`, which parses the
+response and expects the extra bytes. Removing it causes a framing error that
+crashes pivy-agent (see [#19]).
 
 #### Behavior
 
