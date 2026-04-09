@@ -74,6 +74,7 @@ Relevant protocol constants:
 | `SSH_AGENTC_UNLOCK`          | 23    |
 | `SSH_AGENTC_EXTENSION`       | 27    |
 | `SSH_AGENT_EXT_FAILURE`      | 28    |
+| `SSH2_AGENT_EXT_RESPONSE`    | 29    |
 
 ### Extension Dispatch
 
@@ -102,6 +103,16 @@ string   inner_payload    (u32 length + extension-specific fields)
 The inner payload is unwrapped before being passed to the handler. Extensions
 that use string wrapping are noted in their individual sections.
 
+#### Data-Bearing Responses
+
+When an extension handler returns data, the agent MUST respond with
+`SSH2_AGENT_EXT_RESPONSE` (29). Extensions that return no data (e.g.
+`session-bind@openssh.com`) respond with `SSH_AGENT_SUCCESS` (6) instead.
+
+This follows the convention established in draft-ietf-sshm-ssh-agent (section
+3.8) and matches the behavior of OpenSSH, Go x/crypto/ssh/agent, and
+ssh-agent-lib.
+
 #### Error Responses
 
 When an extension handler returns an error, the agent MUST respond with
@@ -129,16 +140,15 @@ No payload beyond `extname`.
 #### Response
 
 ```
-u8       SSH_AGENT_SUCCESS (6)
-u32      n                    (number of extensions)
-cstring  name[0]              (first extension name)
-cstring  name[1]
-...
-cstring  name[n-1]
+u8       SSH2_AGENT_EXT_RESPONSE (29)
+string   names_blob               (SSH string containing extension names)
 ```
 
-Extension names are returned in registration order. This extension MUST NOT
-return an error.
+The `names_blob` contains each extension name encoded as a `cstring` (u32 length
++ bytes + NUL), packed sequentially. Extension names are returned in registration
+order. Clients iterate the blob until exhausted rather than relying on a count.
+
+This extension MUST NOT return an error.
 
 ### Extension: `ecdh@joyent.com`
 
@@ -162,7 +172,7 @@ Non-zero `flags` MUST cause a `FlagsError`.
 #### Response
 
 ```
-u8       SSH_AGENT_SUCCESS (6)
+u8       SSH2_AGENT_EXT_RESPONSE (29)
 string   secret               (raw ECDH shared secret)
 ```
 
@@ -214,7 +224,7 @@ token for the re-encrypted box metadata.
 #### Response
 
 ```
-u8       SSH_AGENT_SUCCESS (6)
+u8       SSH2_AGENT_EXT_RESPONSE (29)
 string   newbox               (serialized re-encrypted piv_ecdh_box)
 ```
 
@@ -245,7 +255,7 @@ u32      flags    (MUST be 0)
 #### Response
 
 ```
-u8       SSH_AGENT_SUCCESS (6)
+u8       SSH2_AGENT_EXT_RESPONSE (29)
 string   cert_der            (DER-encoded X.509 certificate)
 ```
 
@@ -277,7 +287,7 @@ u32      flags    (MUST be 0)
 #### Response
 
 ```
-u8       SSH_AGENT_SUCCESS (6)
+u8       SSH2_AGENT_EXT_RESPONSE (29)
 u32      2                    (certificate count)
 string   attest_cert          (DER-encoded slot attestation certificate)
 string   attest_ca_cert       (DER-encoded YubiKey attestation intermediate CA)
@@ -319,7 +329,7 @@ passes this directly to the PIV sign operation without further hashing.
 #### Response
 
 ```
-u8       SSH_AGENT_SUCCESS (6)
+u8       SSH2_AGENT_EXT_RESPONSE (29)
 string   rawsig               (raw signature bytes from the PIV operation)
 ```
 
@@ -388,7 +398,7 @@ No payload beyond `extname`.
 #### Response
 
 ```
-u8    SSH_AGENT_SUCCESS (6)
+u8    SSH2_AGENT_EXT_RESPONSE (29)
 u8    has_pin              (1 if a PIN is cached, 0 otherwise)
 u8    has_card             (1 if card is present and responsive, 0 otherwise)
 ```
@@ -397,7 +407,7 @@ The card-present check attempts a PCSC transaction begin/end. If the
 transaction fails (card removed, reader error), `has_card` is 0.
 
 This extension MUST NOT return an error. It always responds with
-`SSH_AGENT_SUCCESS`.
+`SSH2_AGENT_EXT_RESPONSE`.
 
 #### Client Usage
 
@@ -530,6 +540,8 @@ non-pivy agents.
 
 - [RFC 2119] Bradner, S., "Key words for use in RFCs to Indicate Requirement
   Levels", BCP 14, RFC 2119, March 1997.
+- [draft-ietf-sshm-ssh-agent] "The Secure Shell (SSH) Agent Protocol", IETF
+  Internet-Draft, section 3.8 defines extension response types.
 - [OpenSSH agent protocol] OpenSSH `PROTOCOL.agent`, defines
   `SSH_AGENTC_EXTENSION`, `SSH_AGENT_EXT_FAILURE`, and the extension dispatch
   mechanism.

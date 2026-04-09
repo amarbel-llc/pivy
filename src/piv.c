@@ -7333,26 +7333,57 @@ piv_box_open_agent(int fd, struct piv_ecdh_box *box)
 		err = ssherrf("sshbuf_get_u8", rc);
 		goto out;
 	}
-	if (code != SSH_AGENT_SUCCESS) {
+	if (code != SSH_AGENT_SUCCESS && code != SSH2_AGENT_EXT_RESPONSE) {
 		err = errf("NotSupportedError", NULL, "SSH agent does not "
 		    "support 'query' extension (returned code %d)", (int)code);
 		goto out;
 	}
-	if ((rc = sshbuf_get_u32(reply, &nexts))) {
-		err = ssherrf("sshbuf_get_u32", rc);
-		goto out;
-	}
-	for (i = 0; i < nexts; ++i) {
-		if ((rc = sshbuf_get_cstring(reply, &extname, &len))) {
-			err = ssherrf("sshbuf_get_cstring", rc);
+	if (code == SSH2_AGENT_EXT_RESPONSE) {
+		/*
+		 * Spec format: extension names are cstrings packed inside
+		 * a single SSH string blob.
+		 */
+		struct sshbuf *inner = NULL;
+		if ((rc = sshbuf_froms(reply, &inner))) {
+			err = ssherrf("sshbuf_froms", rc);
 			goto out;
 		}
-		if (strcmp("ecdh-rebox@joyent.com", extname) == 0)
-			has_rebox = 1;
-		else if (strcmp("ecdh@joyent.com", extname) == 0)
-			has_ecdh = 1;
-		free(extname);
-		extname = NULL;
+		while (sshbuf_len(inner) > 0) {
+			if ((rc = sshbuf_get_cstring(inner, &extname,
+			    &len))) {
+				err = ssherrf("sshbuf_get_cstring", rc);
+				sshbuf_free(inner);
+				goto out;
+			}
+			if (strcmp("ecdh-rebox@joyent.com", extname) == 0)
+				has_rebox = 1;
+			else if (strcmp("ecdh@joyent.com", extname) == 0)
+				has_ecdh = 1;
+			free(extname);
+			extname = NULL;
+		}
+		sshbuf_free(inner);
+	} else {
+		/*
+		 * Legacy pivy format: u32 count followed by count cstrings.
+		 */
+		if ((rc = sshbuf_get_u32(reply, &nexts))) {
+			err = ssherrf("sshbuf_get_u32", rc);
+			goto out;
+		}
+		for (i = 0; i < nexts; ++i) {
+			if ((rc = sshbuf_get_cstring(reply, &extname,
+			    &len))) {
+				err = ssherrf("sshbuf_get_cstring", rc);
+				goto out;
+			}
+			if (strcmp("ecdh-rebox@joyent.com", extname) == 0)
+				has_rebox = 1;
+			else if (strcmp("ecdh@joyent.com", extname) == 0)
+				has_ecdh = 1;
+			free(extname);
+			extname = NULL;
+		}
 	}
 
 	sshbuf_reset(req);
@@ -7424,7 +7455,7 @@ piv_box_open_agent(int fd, struct piv_ecdh_box *box)
 			err = ssherrf("sshbuf_get_u8", rc);
 			goto out;
 		}
-		if (code != SSH_AGENT_SUCCESS) {
+		if (code != SSH_AGENT_SUCCESS && code != SSH2_AGENT_EXT_RESPONSE) {
 			err = errf("SSHAgentError", NULL, "SSH agent returned "
 			    "message code %d to rebox request", (int)code);
 			goto out;
@@ -7497,7 +7528,7 @@ piv_box_open_agent(int fd, struct piv_ecdh_box *box)
 			err = ssherrf("sshbuf_get_u8", rc);
 			goto out;
 		}
-		if (code != SSH_AGENT_SUCCESS) {
+		if (code != SSH_AGENT_SUCCESS && code != SSH2_AGENT_EXT_RESPONSE) {
 			err = errf("SSHAgentError", NULL, "SSH agent returned "
 			    "message code %d to ECDH request", (int)code);
 			goto out;
