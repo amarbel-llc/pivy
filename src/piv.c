@@ -6958,18 +6958,27 @@ errf_t *piv_box_open_agent(int fd, struct piv_ecdh_box *box) {
   }
   if (code == SSH2_AGENT_EXT_RESPONSE) {
     /*
-     * Spec format: extension names are cstrings packed inside
-     * a single SSH string blob.
+     * Spec format (matches OpenSSH): the response echoes the
+     * extension name "query", then lists supported extensions
+     * as flat cstrings.
      */
-    struct sshbuf *inner = NULL;
-    if ((rc = sshbuf_froms(reply, &inner))) {
-      err = ssherrf("sshbuf_froms", rc);
+    char *echo = NULL;
+    if ((rc = sshbuf_get_cstring(reply, &echo, NULL))) {
+      err = ssherrf("sshbuf_get_cstring", rc);
       goto out;
     }
-    while (sshbuf_len(inner) > 0) {
-      if ((rc = sshbuf_get_cstring(inner, &extname, &len))) {
+    if (strcmp(echo, "query") != 0) {
+      err = errf("InvalidFormatError", NULL,
+                 "query extension response did not echo "
+                 "'query' (got '%s')",
+                 echo);
+      free(echo);
+      goto out;
+    }
+    free(echo);
+    while (sshbuf_len(reply) > 0) {
+      if ((rc = sshbuf_get_cstring(reply, &extname, &len))) {
         err = ssherrf("sshbuf_get_cstring", rc);
-        sshbuf_free(inner);
         goto out;
       }
       if (strcmp("ecdh-rebox@joyent.com", extname) == 0)
@@ -6979,7 +6988,6 @@ errf_t *piv_box_open_agent(int fd, struct piv_ecdh_box *box) {
       free(extname);
       extname = NULL;
     }
-    sshbuf_free(inner);
   } else {
     /*
      * Legacy pivy format: u32 count followed by count cstrings.

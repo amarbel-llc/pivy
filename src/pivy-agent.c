@@ -2195,23 +2195,22 @@ out:
 static errf_t *process_ext_query(socket_entry_t *e, struct sshbuf *buf) {
   int r;
   struct exthandler *h;
-  struct sshbuf *msg, *inner;
+  struct sshbuf *msg;
 
-  if ((msg = sshbuf_new()) == NULL || (inner = sshbuf_new()) == NULL)
+  if ((msg = sshbuf_new()) == NULL)
     fatal("%s: sshbuf_new failed", __func__);
 
+  if ((r = sshbuf_put_u8(msg, SSH2_AGENT_EXT_RESPONSE)) != 0 ||
+      (r = sshbuf_put_cstring(msg, "query")) != 0)
+    fatal("%s: buffer error: %s", __func__, ssh_err(r));
+
   for (h = exthandlers; h->eh_name != NULL; ++h) {
-    if ((r = sshbuf_put_cstring(inner, h->eh_name)) != 0)
+    if ((r = sshbuf_put_cstring(msg, h->eh_name)) != 0)
       fatal("%s: buffer error: %s", __func__, ssh_err(r));
   }
 
-  if ((r = sshbuf_put_u8(msg, SSH2_AGENT_EXT_RESPONSE)) != 0 ||
-      (r = sshbuf_put_stringb(msg, inner)) != 0)
-    fatal("%s: buffer error: %s", __func__, ssh_err(r));
-
   if ((r = sshbuf_put_stringb(e->se_output, msg)) != 0)
     fatal("%s: buffer error: %s", __func__, ssh_err(r));
-  sshbuf_free(inner);
   sshbuf_free(msg);
 
   return (NULL);

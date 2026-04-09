@@ -141,12 +141,17 @@ No payload beyond `extname`.
 
 ```
 u8       SSH2_AGENT_EXT_RESPONSE (29)
-string   names_blob               (SSH string containing extension names)
+cstring  "query"                  (extension name echo)
+cstring  name[0]                  (first supported extension)
+cstring  name[1]                  ...
 ```
 
-The `names_blob` contains each extension name encoded as a `cstring` (u32 length
-+ bytes + NUL), packed sequentially. Extension names are returned in registration
-order. Clients iterate the blob until exhausted rather than relying on a count.
+The response echoes the extension name `"query"` as required by the IETF spec
+(draft-ietf-sshm-ssh-agent §3.8), followed by each supported extension name as
+a flat `cstring`. Extension names are returned in registration order. Clients
+read the echo, validate it matches `"query"`, then iterate remaining cstrings
+until the message is exhausted. This matches the wire format used by OpenSSH's
+`process_ext_query` in `ssh-agent.c`.
 
 This extension MUST NOT return an error.
 
