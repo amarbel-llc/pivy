@@ -1,4 +1,4 @@
-all: pivy-tool pivy-agent pivy-box
+all: pivy-tool pivy-agent pivy-box pivy-wire-test
 
 LIBRESSL_VER	= 4.0.0
 LIBRESSL_URL	= https://ftp.openbsd.org/pub/OpenBSD/LibreSSL/libressl-$(LIBRESSL_VER).tar.gz
@@ -722,6 +722,29 @@ pivy-agent :		HEADERS=	$(AGENT_HEADERS)
 pivy-agent: $(AGENT_OBJS) $(LIBSSH) $(LIBCRYPTO)
 	$(CC) $(LDFLAGS) -o $@ $(AGENT_OBJS) $(LIBSSH) $(LIBS)
 
+WIRETEST_SOURCES=	test/pivy-wire-test.c
+WIRETEST_OBJS=		$(WIRETEST_SOURCES:%.c=%.o)
+WIRETEST_CFLAGS=	$(CRYPTO_CFLAGS) \
+			$(ZLIB_CFLAGS) \
+			$(SYSTEM_CFLAGS) \
+			$(SECURITY_CFLAGS) \
+			-O2 -g -D_GNU_SOURCE \
+			-I$(OPENSSH)
+WIRETEST_LDFLAGS=	$(SYSTEM_LDFLAGS)
+WIRETEST_LIBS=		$(CRYPTO_LIBS) \
+			$(ZLIB_LIBS) \
+			$(SYSTEM_LIBS)
+
+pivy-wire-test :	CFLAGS=		$(WIRETEST_CFLAGS)
+pivy-wire-test :	LIBS+=		$(WIRETEST_LIBS)
+pivy-wire-test :	LDFLAGS+=	$(WIRETEST_LDFLAGS)
+
+pivy-wire-test: $(WIRETEST_OBJS) $(LIBSSH) $(LIBCRYPTO)
+	$(CC) $(LDFLAGS) -o $@ $(WIRETEST_OBJS) $(LIBSSH) $(LIBS)
+
+test/%.o: test/%.c .openssh.configure $(LIBCRYPTO)
+	$(CC) $(CFLAGS) -I. -o $@ -c $<
+
 src/%.o: src/%.c $(HEADERS) .openssh.configure $(LIBCRYPTO)
 	$(CC) $(CFLAGS) -I. -o $@ -c $<
 
@@ -732,6 +755,7 @@ clean:
 	rm -f pivy-tool $(PIVTOOL_OBJS)
 	rm -f pivy-agent $(AGENT_OBJS)
 	rm -f pivy-box $(PIVYBOX_OBJS)
+	rm -f pivy-wire-test $(WIRETEST_OBJS)
 	rm -f pivy-zfs $(PIVZFS_OBJS)
 	rm -f pivy-luks $(PIVYLUKS_OBJS)
 	rm -f pivy-ca $(PIVYCA_OBJS)

@@ -1939,6 +1939,7 @@ static errf_t *process_ext_x509_certs(socket_entry_t *e, struct sshbuf *buf) {
   clen = rc;
 
   if ((rc = sshbuf_put_u8(msg, SSH2_AGENT_EXT_RESPONSE)) != 0 ||
+      (rc = sshbuf_put_cstring(msg, "x509-certs@joyent.com")) != 0 ||
       (rc = sshbuf_put_string(msg, cbuf, clen)) != 0)
     fatal("%s: buffer error: %s", __func__, ssh_err(rc));
 
@@ -2044,6 +2045,7 @@ pin_again:
   agent_piv_close(B_FALSE);
 
   if ((r = sshbuf_put_u8(msg, SSH2_AGENT_EXT_RESPONSE)) != 0 ||
+      (r = sshbuf_put_cstring(msg, "sign-prehash@arekinath.github.io")) != 0 ||
       (r = sshbuf_put_string(msg, rawsig, rslen)) != 0)
     fatal("%s: buffer error: %s", __func__, ssh_err(r));
 
@@ -2174,6 +2176,7 @@ static errf_t *process_ext_attest(socket_entry_t *e, struct sshbuf *buf) {
   tlv_skip(tlv);
 
   if ((r = sshbuf_put_u8(msg, SSH2_AGENT_EXT_RESPONSE)) != 0 ||
+      (r = sshbuf_put_cstring(msg, "ykpiv-attest@joyent.com")) != 0 ||
       (r = sshbuf_put_u32(msg, 2)) != 0)
     fatal("%s: buffer error: %s", __func__, ssh_err(r));
 
@@ -2228,9 +2231,11 @@ static errf_t *process_ext_pin_status(socket_entry_t *e, struct sshbuf *buf) {
   /*
    * Return whether a PIN is currently cached and whether the card
    * is present.
-   * Response: SSH2_AGENT_EXT_RESPONSE + u8(has_pin) + u8(has_card)
+   * Response: SSH2_AGENT_EXT_RESPONSE + cstring(name) + u8(has_pin) +
+   * u8(has_card)
    */
-  if ((r = sshbuf_put_u8(msg, SSH2_AGENT_EXT_RESPONSE)) != 0)
+  if ((r = sshbuf_put_u8(msg, SSH2_AGENT_EXT_RESPONSE)) != 0 ||
+      (r = sshbuf_put_cstring(msg, "pin-status@joyent.com")) != 0)
     fatal("%s: buffer error: %s", __func__, ssh_err(r));
   if ((r = sshbuf_put_u8(msg, pin_len > 0 ? 1 : 0)) != 0)
     fatal("%s: buffer error: %s", __func__, ssh_err(r));

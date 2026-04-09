@@ -106,8 +106,11 @@ that use string wrapping are noted in their individual sections.
 #### Data-Bearing Responses
 
 When an extension handler returns data, the agent MUST respond with
-`SSH2_AGENT_EXT_RESPONSE` (29). Extensions that return no data (e.g.
-`session-bind@openssh.com`) respond with `SSH_AGENT_SUCCESS` (6) instead.
+`SSH2_AGENT_EXT_RESPONSE` (29). Per draft-ietf-sshm-ssh-agent §3.8, all
+`SSH2_AGENT_EXT_RESPONSE` messages MUST echo the extension name as the first
+`cstring` field. Extensions that return no data (e.g.
+`session-bind@openssh.com`) respond with `SSH_AGENT_SUCCESS` (6) instead and
+do not include a name echo.
 
 This follows the convention established in draft-ietf-sshm-ssh-agent (section
 3.8) and matches the behavior of OpenSSH, Go x/crypto/ssh/agent, and
@@ -178,6 +181,7 @@ Non-zero `flags` MUST cause a `FlagsError`.
 
 ```
 u8       SSH2_AGENT_EXT_RESPONSE (29)
+cstring  "ecdh@joyent.com"    (extension name echo)
 string   secret               (raw ECDH shared secret)
 ```
 
@@ -230,6 +234,7 @@ token for the re-encrypted box metadata.
 
 ```
 u8       SSH2_AGENT_EXT_RESPONSE (29)
+cstring  "ecdh-rebox@joyent.com" (extension name echo)
 string   newbox               (serialized re-encrypted piv_ecdh_box)
 ```
 
@@ -261,6 +266,7 @@ u32      flags    (MUST be 0)
 
 ```
 u8       SSH2_AGENT_EXT_RESPONSE (29)
+cstring  "x509-certs@joyent.com" (extension name echo)
 string   cert_der            (DER-encoded X.509 certificate)
 ```
 
@@ -293,6 +299,7 @@ u32      flags    (MUST be 0)
 
 ```
 u8       SSH2_AGENT_EXT_RESPONSE (29)
+cstring  "ykpiv-attest@joyent.com" (extension name echo)
 u32      2                    (certificate count)
 string   attest_cert          (DER-encoded slot attestation certificate)
 string   attest_ca_cert       (DER-encoded YubiKey attestation intermediate CA)
@@ -335,6 +342,7 @@ passes this directly to the PIV sign operation without further hashing.
 
 ```
 u8       SSH2_AGENT_EXT_RESPONSE (29)
+cstring  "sign-prehash@arekinath.github.io" (extension name echo)
 string   rawsig               (raw signature bytes from the PIV operation)
 ```
 
@@ -403,9 +411,10 @@ No payload beyond `extname`.
 #### Response
 
 ```
-u8    SSH2_AGENT_EXT_RESPONSE (29)
-u8    has_pin              (1 if a PIN is cached, 0 otherwise)
-u8    has_card             (1 if card is present and responsive, 0 otherwise)
+u8       SSH2_AGENT_EXT_RESPONSE (29)
+cstring  "pin-status@joyent.com" (extension name echo)
+u8       has_pin              (1 if a PIN is cached, 0 otherwise)
+u8       has_card             (1 if card is present and responsive, 0 otherwise)
 ```
 
 The card-present check attempts a PCSC transaction begin/end. If the

@@ -261,6 +261,7 @@
             install -m 755 pivy-tool $out/bin/.pivy-tool-unwrapped
             install -m 755 pivy-agent $out/bin/.pivy-agent-unwrapped
             install -m 755 pivy-box $out/bin/.pivy-box-unwrapped
+            install -m 755 pivy-wire-test $out/bin/pivy-wire-test
 
             # Create wrapper scripts that preload system pcsclite
             # This is needed on non-NixOS where pcscd version must match client library
