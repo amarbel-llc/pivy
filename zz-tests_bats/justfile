@@ -14,4 +14,8 @@ test-tags *tags:
 
 test: (test-targets "*.bats")
 
+test-hardware:
+  BATS_TEST_TIMEOUT="30" \
+    bats --tap --no-sandbox --filter-tags hardware pivy_ext_interop.bats
+
 test-rust: (test-targets "pivy_agent_rust.bats")

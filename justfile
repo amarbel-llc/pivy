@@ -19,6 +19,9 @@ test: test-bats test-bats-rust
 test-bats: build-nix
   PATH="$(readlink -f ./result)/bin:$PATH" just zz-tests_bats/test
 
+test-hardware: build-nix
+  PATH="$(readlink -f ./result)/bin:$PATH" just zz-tests_bats/test-hardware
+
 test-bats-rust: build-nix-rust
   PIVY_AGENT_RUST="$(readlink -f ./result-rust)/bin/pivy-agent-rust" just zz-tests_bats/test-rust
 
