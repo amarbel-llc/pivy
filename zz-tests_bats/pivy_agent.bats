@@ -28,8 +28,9 @@ install_service_setup() {
     mkdir -p "$HOME/Library"
     SERVICE_FILE="$HOME/Library/LaunchAgents/net.cooperi.pivy-agent.plist"
   else
-    mkdir -p "$HOME/.config"
-    SERVICE_FILE="$HOME/.config/systemd/user/pivy-agent@.service"
+    local config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+    mkdir -p "$config_home"
+    SERVICE_FILE="$config_home/systemd/user/pivy-agent@.service"
   fi
   stub_service_commands
 }
