@@ -426,7 +426,7 @@ static int agent_connect(const char *sock_path) {
 static int agent_send_recv(int fd, struct sshbuf *req, struct sshbuf *reply) {
   int rc;
   uint32_t msg_len;
-  uint8_t buf[262144];
+  uint8_t *buf = NULL;
   ssize_t n;
 
   /* Frame the request: u32(len) + payload */
@@ -465,24 +465,29 @@ static int agent_send_recv(int fd, struct sshbuf *req, struct sshbuf *reply) {
   msg_len = ((uint32_t)lenbuf[0] << 24) | ((uint32_t)lenbuf[1] << 16) |
             ((uint32_t)lenbuf[2] << 8) | (uint32_t)lenbuf[3];
 
-  if (msg_len == 0 || msg_len > sizeof(buf))
+  if (msg_len == 0 || msg_len > 262144)
+    return (-1);
+
+  buf = malloc(msg_len);
+  if (buf == NULL)
     return (-1);
 
   /* Read response body */
   got = 0;
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wstringop-overflow"
   while (got < (size_t)msg_len) {
     size_t remaining = (size_t)msg_len - got;
     n = read(fd, buf + got, remaining);
-    if (n <= 0)
+    if (n <= 0) {
+      free(buf);
       return (-1);
+    }
     got += n;
   }
-#pragma GCC diagnostic pop
 
   sshbuf_reset(reply);
-  if ((rc = sshbuf_put(reply, buf, msg_len)) != 0)
+  rc = sshbuf_put(reply, buf, msg_len);
+  free(buf);
+  if (rc != 0)
     return (-1);
 
   return (0);
