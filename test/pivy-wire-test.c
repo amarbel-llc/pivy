@@ -465,17 +465,21 @@ static int agent_send_recv(int fd, struct sshbuf *req, struct sshbuf *reply) {
   msg_len = ((uint32_t)lenbuf[0] << 24) | ((uint32_t)lenbuf[1] << 16) |
             ((uint32_t)lenbuf[2] << 8) | (uint32_t)lenbuf[3];
 
-  if (msg_len > sizeof(buf))
+  if (msg_len == 0 || msg_len > sizeof(buf))
     return (-1);
 
   /* Read response body */
   got = 0;
-  while (got < msg_len) {
-    n = read(fd, buf + got, msg_len - got);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+  while (got < (size_t)msg_len) {
+    size_t remaining = (size_t)msg_len - got;
+    n = read(fd, buf + got, remaining);
     if (n <= 0)
       return (-1);
     got += n;
   }
+#pragma GCC diagnostic pop
 
   sshbuf_reset(reply);
   if ((rc = sshbuf_put(reply, buf, msg_len)) != 0)
