@@ -50,16 +50,17 @@ function pivy_box_binary_references_ssh_askpass { # @test
   local binary
   binary="$(resolve_unwrapped pivy-box)"
 
-  run strings "$binary"
+  # Pipe through grep to avoid loading the full strings output into bats'
+  # lines array — the thousands of entries overflow ARG_MAX and cause E2BIG
+  # on subsequent execve() calls.
+  run bats_pipe strings "$binary" \| grep SSH_ASKPASS
   assert_success
-  assert_output --partial 'SSH_ASKPASS'
 }
 
 function pivy_agent_binary_references_ssh_askpass { # @test
   local binary
   binary="$(resolve_unwrapped pivy-agent)"
 
-  run strings "$binary"
+  run bats_pipe strings "$binary" \| grep SSH_ASKPASS
   assert_success
-  assert_output --partial 'SSH_ASKPASS'
 }
