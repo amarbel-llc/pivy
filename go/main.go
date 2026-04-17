@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -174,6 +176,119 @@ func testPinStatus(client agent.ExtendedAgent) {
 	pass(name, fmt.Sprintf("type=29, echo, has_pin=%d has_card=%d", hasPin, hasCard))
 }
 
+func putSSHString(buf []byte, s []byte) []byte {
+	var lenBuf [4]byte
+	binary.BigEndian.PutUint32(lenBuf[:], uint32(len(s)))
+	buf = append(buf, lenBuf[:]...)
+	buf = append(buf, s...)
+	return buf
+}
+
+func generateDummyKey() (ssh.PublicKey, error) {
+	pub, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	sshPub, err := ssh.NewPublicKey(pub)
+	if err != nil {
+		return nil, err
+	}
+	return sshPub, nil
+}
+
+func testSessionBind(client agent.ExtendedAgent) {
+	name := "session-bind@openssh.com"
+
+	dummyKey, err := generateDummyKey()
+	if err != nil {
+		fail(name, fmt.Sprintf("failed to generate dummy key: %v", err))
+		return
+	}
+
+	// Wire format: ssh_key_blob + ssh_string(session_id) + ssh_string(signature) + u8(is_forwarding)
+	var contents []byte
+	contents = putSSHString(contents, dummyKey.Marshal())
+	contents = putSSHString(contents, []byte("dummy-session-id"))
+	contents = putSSHString(contents, []byte("dummy-signature"))
+	contents = append(contents, 0) // is_forwarding=0 (auth bind)
+
+	resp, err := client.Extension("session-bind@openssh.com", contents)
+	if errors.Is(err, agent.ErrExtensionUnsupported) {
+		fail(name, "agent does not support session-bind extension")
+		return
+	}
+	if err != nil {
+		fail(name, fmt.Sprintf("Extension() error: %v", err))
+		return
+	}
+
+	// pivy-agent returns SSH_AGENT_SUCCESS (type 6) with a trailing u32
+	if len(resp) < 1 {
+		fail(name, "empty response")
+		return
+	}
+	if resp[0] != 6 {
+		fail(name, fmt.Sprintf("expected type 6 (SSH_AGENT_SUCCESS), got %d", resp[0]))
+		return
+	}
+
+	pass(name, "type=6 (SSH_AGENT_SUCCESS)")
+}
+
+func testX509CertsNoCard(client agent.ExtendedAgent) {
+	name := "x509-certs@joyent.com (no card)"
+
+	dummyKey, err := generateDummyKey()
+	if err != nil {
+		fail(name, fmt.Sprintf("failed to generate dummy key: %v", err))
+		return
+	}
+
+	// Wire format: ssh_key_blob + u32(flags)
+	var contents []byte
+	contents = putSSHString(contents, dummyKey.Marshal())
+	var flagsBuf [4]byte
+	binary.BigEndian.PutUint32(flagsBuf[:], 0)
+	contents = append(contents, flagsBuf[:]...)
+
+	_, err = client.Extension("x509-certs@joyent.com", contents)
+	if err == nil {
+		fail(name, "expected failure with unknown key, got success")
+		return
+	}
+
+	// Any error is acceptable — the key doesn't match a card, so the agent
+	// should reject it. What matters is the agent didn't crash and the
+	// connection is still alive.
+	pass(name, fmt.Sprintf("graceful failure: %v", err))
+}
+
+func testSignPrehashNoCard(client agent.ExtendedAgent) {
+	name := "sign-prehash@arekinath.github.io (no card)"
+
+	dummyKey, err := generateDummyKey()
+	if err != nil {
+		fail(name, fmt.Sprintf("failed to generate dummy key: %v", err))
+		return
+	}
+
+	// Wire format: ssh_key_blob + ssh_string(data) + u32(flags)
+	var contents []byte
+	contents = putSSHString(contents, dummyKey.Marshal())
+	contents = putSSHString(contents, []byte("dummy-prehash-data"))
+	var flagsBuf [4]byte
+	binary.BigEndian.PutUint32(flagsBuf[:], 0)
+	contents = append(contents, flagsBuf[:]...)
+
+	_, err = client.Extension("sign-prehash@arekinath.github.io", contents)
+	if err == nil {
+		fail(name, "expected failure with unknown key, got success")
+		return
+	}
+
+	pass(name, fmt.Sprintf("graceful failure: %v", err))
+}
+
 func main() {
 	if len(os.Args) != 2 {
 		fmt.Fprintf(os.Stderr, "Usage: pivy-agent-conformance <socket-path>\n")
@@ -193,6 +308,9 @@ func main() {
 	keys := testList(client)
 	testSign(client, keys)
 	testQuery(client)
+	testSessionBind(client)
+	testX509CertsNoCard(client)
+	testSignPrehashNoCard(client)
 	testPinStatus(client)
 
 	fmt.Printf("\n%d passed, %d failed\n", passed, failed)
