@@ -18,6 +18,16 @@ import (
 
 var passed, failed int
 
+func isConnectionDead(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "EOF") ||
+		strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "connection reset")
+}
+
 func pass(name, detail string) {
 	fmt.Printf("PASS: %s — %s\n", name, detail)
 	passed++
@@ -258,10 +268,11 @@ func testX509CertsNoCard(client agent.ExtendedAgent) {
 		fail(name, "expected failure with unknown key, got success")
 		return
 	}
+	if isConnectionDead(err) {
+		fail(name, fmt.Sprintf("agent crashed or connection lost: %v", err))
+		return
+	}
 
-	// Any error is acceptable — the key doesn't match a card, so the agent
-	// should reject it. What matters is the agent didn't crash and the
-	// connection is still alive.
 	pass(name, fmt.Sprintf("graceful failure: %v", err))
 }
 
@@ -285,6 +296,10 @@ func testSignPrehashNoCard(client agent.ExtendedAgent) {
 	_, err = client.Extension("sign-prehash@arekinath.github.io", contents)
 	if err == nil {
 		fail(name, "expected failure with unknown key, got success")
+		return
+	}
+	if isConnectionDead(err) {
+		fail(name, fmt.Sprintf("agent crashed or connection lost: %v", err))
 		return
 	}
 
@@ -417,6 +432,10 @@ func testECDHRebox(client agent.ExtendedAgent, keys []*agent.Key, hardware bool)
 	_, err = client.Extension("ecdh-rebox@joyent.com", wrapInSSHString(inner))
 	if err == nil {
 		fail(name, "expected failure with dummy box, got success")
+		return
+	}
+	if isConnectionDead(err) {
+		fail(name, fmt.Sprintf("agent crashed or connection lost: %v", err))
 		return
 	}
 
