@@ -2244,12 +2244,16 @@ static errf_t *process_ext_pin_status(socket_entry_t *e, struct sshbuf *buf) {
     errf_t *err;
     uint8_t card_present = 0;
     if (selk != NULL) {
-      err = piv_txn_begin(selk);
-      if (err == ERRF_OK) {
+      if (txnopen) {
         card_present = 1;
-        piv_txn_end(selk);
       } else {
-        errf_free(err);
+        err = piv_txn_begin(selk);
+        if (err == ERRF_OK) {
+          card_present = 1;
+          piv_txn_end(selk);
+        } else {
+          errf_free(err);
+        }
       }
     }
     if ((r = sshbuf_put_u8(msg, card_present)) != 0)
