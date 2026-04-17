@@ -203,6 +203,33 @@
           };
         };
 
+        pivy-agent-conformance = pkgs.buildGoModule {
+          pname = "pivy-agent-conformance";
+          version = "0.1.0";
+
+          src = pkgs.lib.fileset.toSource {
+            root = ./go;
+            fileset = pkgs.lib.fileset.unions [
+              ./go/go.mod
+              ./go/go.sum
+              ./go/main.go
+            ];
+          };
+
+          vendorHash = "sha256-P8Y1OaDAgNbfGA99vNeXlfOuQqpMhHPebxYceLgZew0=";
+
+          postInstall = ''
+            mv $out/bin/conformance $out/bin/pivy-agent-conformance
+          '';
+
+          meta = with pkgs.lib; {
+            description = "Go-based SSH agent conformance tests for pivy";
+            homepage = "https://github.com/amarbel-llc/pivy";
+            license = licenses.mpl20;
+            platforms = platforms.linux ++ platforms.darwin;
+          };
+        };
+
         # Extract YYYY-MM-DD from the flake's lastModifiedDate (YYYYMMDDHHmmSS)
         revdate =
           let
@@ -345,6 +372,7 @@
         packages.default = pivy;
         packages.pivy = pivy;
         packages.pivy-rust = pivy-rust;
+        packages.pivy-agent-conformance = pivy-agent-conformance;
         packages.libressl = libressl;
         packages.openssh = openssh;
 
