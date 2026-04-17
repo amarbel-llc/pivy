@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 )
 
@@ -38,16 +39,47 @@ func readSSHString(data []byte, offset int) (string, int, error) {
 	return s, offset, nil
 }
 
-func testList(client agent.ExtendedAgent) {
+func testList(client agent.ExtendedAgent) []*agent.Key {
 	name := "list"
 	keys, err := client.List()
 	if err != nil {
 		// pivy-agent returns SSH_AGENT_FAILURE when pcscd is unavailable,
 		// which is a valid protocol response — not a conformance failure.
 		fmt.Printf("SKIP: %s — %v (pcscd likely unavailable)\n", name, err)
-		return
+		return nil
 	}
 	pass(name, fmt.Sprintf("Go parsed identity list: %d keys", len(keys)))
+	return keys
+}
+
+func testSign(client agent.ExtendedAgent, keys []*agent.Key) {
+	name := "sign"
+	if len(keys) == 0 {
+		fmt.Printf("SKIP: %s — no keys available (card not present)\n", name)
+		return
+	}
+
+	key := keys[0]
+	data := []byte("pivy-agent-conformance test payload")
+
+	sig, err := client.Sign(key, data)
+	if err != nil {
+		fail(name, fmt.Sprintf("Sign() error: %v", err))
+		return
+	}
+
+	pubKey, err := ssh.ParsePublicKey(key.Blob)
+	if err != nil {
+		fail(name, fmt.Sprintf("failed to parse public key for verification: %v", err))
+		return
+	}
+
+	if err := pubKey.Verify(data, sig); err != nil {
+		fail(name, fmt.Sprintf("signature verification failed: %v", err))
+		return
+	}
+
+	pass(name, fmt.Sprintf("format=%s, key=%s, verified=true", sig.Format, key.Type()))
 }
 
 func testQuery(client agent.ExtendedAgent) {
@@ -158,7 +190,8 @@ func main() {
 	client := agent.NewClient(conn)
 
 	fmt.Println("Running Go conformance tests...\n")
-	testList(client)
+	keys := testList(client)
+	testSign(client, keys)
 	testQuery(client)
 	testPinStatus(client)
 
