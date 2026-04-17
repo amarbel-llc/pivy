@@ -17,3 +17,5 @@ test-hardware:
 test-rust: (test-targets "pivy_agent_rust.bats")
 
 test-conformance: (test-targets "pivy_agent_conformance.bats")
+
+test-conformance-hardware: (test-targets "pivy_agent_conformance_hardware.bats")

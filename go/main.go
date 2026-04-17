@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/ecdsa"
 	"crypto/ed25519"
+	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
@@ -289,13 +291,231 @@ func testSignPrehashNoCard(client agent.ExtendedAgent) {
 	pass(name, fmt.Sprintf("graceful failure: %v", err))
 }
 
+func wrapInSSHString(payload []byte) []byte {
+	var buf []byte
+	return putSSHString(buf, payload)
+}
+
+func findECDSAKey(keys []*agent.Key) *agent.Key {
+	for _, k := range keys {
+		if strings.HasPrefix(k.Type(), "ecdsa-sha2-") {
+			return k
+		}
+	}
+	return nil
+}
+
+func generateEphemeralECDSA() (ssh.PublicKey, error) {
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	return ssh.NewPublicKey(&priv.PublicKey)
+}
+
+func testECDH(client agent.ExtendedAgent, keys []*agent.Key, hardware bool) {
+	name := "ecdh@joyent.com"
+	if !hardware {
+		fmt.Printf("SKIP: %s — requires --hardware flag\n", name)
+		return
+	}
+
+	ecKey := findECDSAKey(keys)
+	if ecKey == nil {
+		fmt.Printf("SKIP: %s — no ECDSA key available on card\n", name)
+		return
+	}
+
+	partner, err := generateEphemeralECDSA()
+	if err != nil {
+		fail(name, fmt.Sprintf("failed to generate ephemeral ECDSA key: %v", err))
+		return
+	}
+
+	// eh_string=B_TRUE: contents must be a single SSH string wrapping the inner payload
+	// Inner: ssh_key(card_key) + ssh_key(partner) + u32(flags=0)
+	var inner []byte
+	inner = putSSHString(inner, ecKey.Blob)
+	inner = putSSHString(inner, partner.Marshal())
+	var flagsBuf [4]byte
+	inner = append(inner, flagsBuf[:]...)
+
+	resp, err := client.Extension("ecdh@joyent.com", wrapInSSHString(inner))
+	if errors.Is(err, agent.ErrExtensionUnsupported) {
+		fail(name, "agent does not support ecdh extension")
+		return
+	}
+	if err != nil {
+		fail(name, fmt.Sprintf("Extension() error: %v", err))
+		return
+	}
+
+	if len(resp) < 1 || resp[0] != 29 {
+		fail(name, fmt.Sprintf("expected type 29, got %d", resp[0]))
+		return
+	}
+
+	offset := 1
+	echo, next, err := readSSHString(resp, offset)
+	if err != nil {
+		fail(name, fmt.Sprintf("failed to read name echo: %v", err))
+		return
+	}
+	if echo != "ecdh@joyent.com" {
+		fail(name, fmt.Sprintf("name echo mismatch: got %q", echo))
+		return
+	}
+	offset = next
+
+	// Read the ECDH secret
+	if offset+4 > len(resp) {
+		fail(name, "response too short for secret string")
+		return
+	}
+	secretLen := int(binary.BigEndian.Uint32(resp[offset:]))
+	offset += 4
+	if offset+secretLen > len(resp) {
+		fail(name, fmt.Sprintf("secret length %d exceeds response", secretLen))
+		return
+	}
+	if secretLen == 0 {
+		fail(name, "ECDH secret is empty")
+		return
+	}
+
+	pass(name, fmt.Sprintf("type=29, echo, secret_len=%d", secretLen))
+}
+
+func testECDHRebox(client agent.ExtendedAgent, keys []*agent.Key, hardware bool) {
+	name := "ecdh-rebox@joyent.com"
+	if !hardware {
+		fmt.Printf("SKIP: %s — requires --hardware flag\n", name)
+		return
+	}
+	if len(keys) == 0 {
+		fmt.Printf("SKIP: %s — no keys available\n", name)
+		return
+	}
+
+	partner, err := generateEphemeralECDSA()
+	if err != nil {
+		fail(name, fmt.Sprintf("failed to generate ephemeral ECDSA key: %v", err))
+		return
+	}
+
+	// eh_string=B_TRUE: contents wrapped in SSH string
+	// Inner: ssh_string(boxbuf) + ssh_string(guidb) + u8(slotid) + ssh_key(partner) + u32(flags)
+	// We send dummy box data — this will fail at sshbuf_get_piv_box, which is fine.
+	var inner []byte
+	inner = putSSHString(inner, []byte("dummy-box-data"))
+	inner = putSSHString(inner, []byte{}) // empty guid
+	inner = append(inner, 0x9D)           // slot ID
+	inner = putSSHString(inner, partner.Marshal())
+	var flagsBuf [4]byte
+	inner = append(inner, flagsBuf[:]...)
+
+	_, err = client.Extension("ecdh-rebox@joyent.com", wrapInSSHString(inner))
+	if err == nil {
+		fail(name, "expected failure with dummy box, got success")
+		return
+	}
+
+	pass(name, fmt.Sprintf("graceful failure: %v", err))
+}
+
+func testAttest(client agent.ExtendedAgent, keys []*agent.Key, hardware bool) {
+	name := "ykpiv-attest@joyent.com"
+	if !hardware {
+		fmt.Printf("SKIP: %s — requires --hardware flag\n", name)
+		return
+	}
+	if len(keys) == 0 {
+		fmt.Printf("SKIP: %s — no keys available\n", name)
+		return
+	}
+
+	// eh_string=B_TRUE: contents wrapped in SSH string
+	// Inner: ssh_key(card_key) + u32(flags=0)
+	key := keys[0]
+	var inner []byte
+	inner = putSSHString(inner, key.Blob)
+	var flagsBuf [4]byte
+	inner = append(inner, flagsBuf[:]...)
+
+	resp, err := client.Extension("ykpiv-attest@joyent.com", wrapInSSHString(inner))
+	if errors.Is(err, agent.ErrExtensionUnsupported) {
+		fail(name, "agent does not support attest extension")
+		return
+	}
+	if err != nil {
+		fail(name, fmt.Sprintf("Extension() error: %v", err))
+		return
+	}
+
+	if len(resp) < 1 || resp[0] != 29 {
+		fail(name, fmt.Sprintf("expected type 29, got %d", resp[0]))
+		return
+	}
+
+	offset := 1
+	echo, next, err := readSSHString(resp, offset)
+	if err != nil {
+		fail(name, fmt.Sprintf("failed to read name echo: %v", err))
+		return
+	}
+	if echo != "ykpiv-attest@joyent.com" {
+		fail(name, fmt.Sprintf("name echo mismatch: got %q", echo))
+		return
+	}
+	offset = next
+
+	// Read cert count (u32)
+	if offset+4 > len(resp) {
+		fail(name, "response too short for cert count")
+		return
+	}
+	certCount := binary.BigEndian.Uint32(resp[offset:])
+	offset += 4
+
+	// Read each cert blob
+	for i := uint32(0); i < certCount; i++ {
+		if offset+4 > len(resp) {
+			fail(name, fmt.Sprintf("response too short for cert %d length", i))
+			return
+		}
+		certLen := int(binary.BigEndian.Uint32(resp[offset:]))
+		offset += 4
+		if offset+certLen > len(resp) {
+			fail(name, fmt.Sprintf("cert %d length %d exceeds response", i, certLen))
+			return
+		}
+		if certLen == 0 {
+			fail(name, fmt.Sprintf("cert %d is empty", i))
+			return
+		}
+		offset += certLen
+	}
+
+	pass(name, fmt.Sprintf("type=29, echo, %d certs", certCount))
+}
+
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: pivy-agent-conformance <socket-path>\n")
+	var hardware bool
+	args := os.Args[1:]
+	for i, a := range args {
+		if a == "--hardware" {
+			hardware = true
+			args = append(args[:i], args[i+1:]...)
+			break
+		}
+	}
+
+	if len(args) != 1 {
+		fmt.Fprintf(os.Stderr, "Usage: pivy-agent-conformance [--hardware] <socket-path>\n")
 		os.Exit(2)
 	}
 
-	conn, err := net.Dial("unix", os.Args[1])
+	conn, err := net.Dial("unix", args[0])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to connect to agent: %v\n", err)
 		os.Exit(1)
@@ -312,6 +532,10 @@ func main() {
 	testX509CertsNoCard(client)
 	testSignPrehashNoCard(client)
 	testPinStatus(client)
+
+	testECDH(client, keys, hardware)
+	testECDHRebox(client, keys, hardware)
+	testAttest(client, keys, hardware)
 
 	fmt.Printf("\n%d passed, %d failed\n", passed, failed)
 	if failed > 0 {

@@ -33,6 +33,11 @@ test-conformance: build-nix build-nix-conformance
     PATH="$(readlink -f ./result)/bin:$PATH" \
     just zz-tests_bats/test-conformance
 
+test-conformance-hardware: build-nix build-nix-conformance
+  CONFORMANCE_DIR="$(readlink -f ./result-conformance)" \
+    PATH="$(readlink -f ./result)/bin:$PATH" \
+    just zz-tests_bats/test-conformance-hardware
+
 test-rust:
   cd rust && cargo test
 
