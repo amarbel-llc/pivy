@@ -18,6 +18,10 @@ test-rust: (test-targets "pivy_agent_rust.bats")
 
 test-conformance: (test-targets "pivy_agent_conformance.bats")
 
+test-rust-conformance:
+  BATS_TEST_TIMEOUT="30" \
+    bats --tap --allow-unix-sockets pivy_agent_rust_conformance.bats
+
 test-conformance-hardware:
   BATS_TEST_TIMEOUT="30" \
     bats --tap --no-sandbox --filter-tags hardware pivy_agent_conformance_hardware.bats

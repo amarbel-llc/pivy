@@ -81,9 +81,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .collect()
     });
 
-    // Enumerate PIV tokens and cache their keys
-    let ctx = pivy_piv::PivContext::new()?;
-    let tokens = ctx.enumerate_tokens()?;
+    // Enumerate PIV tokens and cache their keys.
+    // If PCSC is unavailable (e.g. no pcscd), start with zero keys.
+    let (tokens, ctx_available) = match pivy_piv::PivContext::new() {
+        Ok(ctx) => match ctx.enumerate_tokens() {
+            Ok(tokens) => (tokens, true),
+            Err(e) => {
+                tracing::warn!("Failed to enumerate PIV tokens: {e}");
+                (Vec::new(), false)
+            }
+        },
+        Err(e) => {
+            tracing::warn!("PCSC not available: {e}");
+            (Vec::new(), false)
+        }
+    };
 
     let mut cached_keys = Vec::new();
     let mut primary_guid = None;

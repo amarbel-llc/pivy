@@ -33,6 +33,11 @@ test-conformance: build-nix build-nix-conformance
     PATH="$(readlink -f ./result)/bin:$PATH" \
     just zz-tests_bats/test-conformance
 
+test-rust-conformance: build-nix-rust build-nix-conformance
+  PIVY_AGENT_RUST="$(readlink -f ./result-rust)/bin/pivy-agent-rust" \
+    CONFORMANCE_DIR="$(readlink -f ./result-conformance)" \
+    just zz-tests_bats/test-rust-conformance
+
 test-conformance-hardware: build-nix build-nix-conformance
   CONFORMANCE_DIR="$(readlink -f ./result-conformance)" \
     PATH="$(readlink -f ./result)/bin:$PATH" \
